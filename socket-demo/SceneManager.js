@@ -11,6 +11,7 @@ class SceneManager {
 
     switchTo(key) {
         const next = this.scenes.get(key);
+        document.title = "Hitloop " + key;
         if (!next) return false;
         this.currentKey = key;
         if (typeof next.setup === 'function') next.setup();
