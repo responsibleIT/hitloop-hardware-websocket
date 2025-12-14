@@ -31,6 +31,7 @@ WebMidi.enable()
 
 // Register example game states
 sceneManager.addScene('intro', new Intro(deviceManager));
+sceneManager.addScene('controlTheBall', new ControlTheBall(deviceManager));
 sceneManager.addScene('music', new MusicVisualizer(deviceManager));
 sceneManager.addScene('rainyDaySingle', new RainyDaySingle(deviceManager));
 // sceneManager.addScene('particles', new Particles(deviceManager));
@@ -58,7 +59,7 @@ function setup() {
     // Connect to WebSocket server
     deviceManager.connect();
     // Default state
-    sceneManager.switchTo('music');
+    sceneManager.switchTo('controlTheBall');
 }
 
 function draw() {
