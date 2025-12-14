@@ -30,34 +30,16 @@ WebMidi.enable()
     });
 
 // Register example game states
-// sceneManager.addScene('list', new DeviceListScene(deviceManager));
-// sceneManager.addScene('first', new FirstDeviceDetailsScene(deviceManager));
-// sceneManager.addScene('heatmap', new GridHeatmapScene(deviceManager));
-// sceneManager.addScene('circles', new StateDeviceCirclesScene(deviceManager));
-// sceneManager.addScene('physics', new PartialPhysicsScene(deviceManager));
-// sceneManager.addScene('physicsWithGlow', new PartialPhysicsWithGlowScene(deviceManager));
-// sceneManager.addScene('wander', new WanderingAttractorsScene(deviceManager));
-// sceneManager.addScene('prototype', new PrototypeScene(deviceManager));
-// sceneManager.addScene('challenge1', new ChallengeOneScene(deviceManager));
-// sceneManager.addScene('start', new StartScene(deviceManager));
-// sceneManager.addScene('two', new TwoTeamsScene2(deviceManager));
-
-// sceneManager.addScene('move', new MoveScene(deviceManager));
-// sceneManager.addScene('playground', new Playground(deviceManager));
-// sceneManager.addScene('reveal', new ChallengeImageReveal(deviceManager));
-// sceneManager.addScene('popcorn', new PopCornScene(deviceManager));
-// sceneManager.addScene('particles', new ParticleDeviceScene(deviceManager));
-//  sceneManager.addScene('eyes', new EyeDeviceScene(deviceManager));
-// sceneManager.addScene('rainyDayGroup', new RainyDayGroup(deviceManager));
- 
+sceneManager.addScene('intro', new Intro(deviceManager));
+sceneManager.addScene('music', new MusicVisualizer(deviceManager));
 sceneManager.addScene('rainyDaySingle', new RainyDaySingle(deviceManager));
-sceneManager.addScene('particles', new Particles(deviceManager));
-sceneManager.addScene('twoPlanets', new TwoPlanets(deviceManager));
-sceneManager.addScene('threePlanets', new ThreePlanets(deviceManager));
-sceneManager.addScene('race', new Race(deviceManager));
-sceneManager.addScene('reveal', new GroupReveal(deviceManager));
-sceneManager.addScene('hats', new HatsScene(deviceManager));
-sceneManager.addScene('midiController', new MidiControllerScene(deviceManager));
+// sceneManager.addScene('particles', new Particles(deviceManager));
+// sceneManager.addScene('twoPlanets', new TwoPlanets(deviceManager));
+// sceneManager.addScene('threePlanets', new ThreePlanets(deviceManager));
+// sceneManager.addScene('race', new Race(deviceManager));
+// sceneManager.addScene('reveal', new GroupReveal(deviceManager));
+// sceneManager.addScene('hats', new HatsScene(deviceManager));
+// sceneManager.addScene('midiController', new MidiControllerScene(deviceManager));
 
 let uiFont;
 
@@ -68,7 +50,7 @@ function preload() {
 }
 
 function setup() {
-    createCanvas(windowWidth, windowHeight, WEBGL);
+    createCanvas(windowWidth, windowHeight);
     if (uiFont) {
         textFont(uiFont);
     }
@@ -76,14 +58,11 @@ function setup() {
     // Connect to WebSocket server
     deviceManager.connect();
     // Default state
-    sceneManager.switchTo('rainyDaySingle');
+    sceneManager.switchTo('music');
 }
 
 function draw() {
-    push();
-    translate(-width/2, -height/2);
     sceneManager.draw();
-    pop();
     if (window.Instructions) window.Instructions.draw();
 }
 

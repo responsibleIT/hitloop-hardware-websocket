@@ -6,6 +6,8 @@ class Scene {
 
     setup() {}
 
+    teardown() {}
+
     draw() {}
 
     drawDebugText() {

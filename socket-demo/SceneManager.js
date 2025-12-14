@@ -13,6 +13,15 @@ class SceneManager {
         const next = this.scenes.get(key);
         document.title = "Hitloop " + key;
         if (!next) return false;
+
+        // Cleanup previous scene
+        if (this.currentKey) {
+            const prev = this.scenes.get(this.currentKey);
+            if (prev && typeof prev.teardown === 'function') {
+                prev.teardown();
+            }
+        }
+
         this.currentKey = key;
         if (typeof next.setup === 'function') next.setup();
         return true;
