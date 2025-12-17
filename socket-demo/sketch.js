@@ -30,10 +30,14 @@ WebMidi.enable()
     });
 
 // Register example game states
-sceneManager.addScene('intro', new Intro(deviceManager));
+// sceneManager.addScene('intro', new Intro(deviceManager));
+sceneManager.addScene('greenBuilding', new GreenBuilding(deviceManager));
+sceneManager.addScene('city', new City(deviceManager));
+sceneManager.addScene('greenLights', new GreenLights(deviceManager));
+sceneManager.addScene('heatMap', new HeatMap(deviceManager));
 sceneManager.addScene('controlTheBall', new ControlTheBall(deviceManager));
 sceneManager.addScene('music', new MusicVisualizer(deviceManager));
-sceneManager.addScene('rainyDaySingle', new RainyDaySingle(deviceManager));
+// sceneManager.addScene('rainyDaySingle', new RainyDaySingle(deviceManager));
 // sceneManager.addScene('particles', new Particles(deviceManager));
 // sceneManager.addScene('twoPlanets', new TwoPlanets(deviceManager));
 // sceneManager.addScene('threePlanets', new ThreePlanets(deviceManager));
@@ -59,7 +63,7 @@ function setup() {
     // Connect to WebSocket server
     deviceManager.connect();
     // Default state
-    sceneManager.switchTo('controlTheBall');
+    sceneManager.switchTo('greenBuilding');
 }
 
 function draw() {

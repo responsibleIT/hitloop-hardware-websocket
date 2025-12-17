@@ -197,13 +197,7 @@ class ControlTheBall extends Scene {
       return target;
     }
 
-    const current = this._colors.get(id);
-    const amt = 0.05; // Smooth fade
-    const r = lerp(current[0], target[0], amt);
-    const g = lerp(current[1], target[1], amt);
-    const b = lerp(current[2], target[2], amt);
-    
-    const nextColor = [r, g, b];
+    const nextColor = target;
     this._colors.set(id, nextColor);
     
     return nextColor;

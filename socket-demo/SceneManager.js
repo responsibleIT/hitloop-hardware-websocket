@@ -23,6 +23,11 @@ class SceneManager {
         }
 
         this.currentKey = key;
+        
+        // Clear background to prevent artifacts from previous scenes
+        // especially when the new scene uses transparent background clearing
+        background(0);
+        
         if (typeof next.setup === 'function') next.setup();
         return true;
     }

@@ -124,12 +124,13 @@ class MusicVisualizer extends Scene {
     else if (minDist === distSE) target = [255, 50, 50];   // Red
     else if (minDist === distNE) target = [0, 255, 255];   // Cyan
 
-    // Transition Logic
-    if (!this._colors.has(id)) {
+    // Transition Logic - REMOVED for strict no-smoothing
+    // if (!this._colors.has(id)) {
       this._colors.set(id, target);
       return target;
-    }
+    // }
 
+    /*
     const current = this._colors.get(id);
     const amt = 0.05; // 5% mix per frame for smooth fade
     const r = lerp(current[0], target[0], amt);
@@ -140,6 +141,7 @@ class MusicVisualizer extends Scene {
     this._colors.set(id, nextColor);
     
     return nextColor;
+    */
   }
 
   _rgbToHex([r, g, b]) {
