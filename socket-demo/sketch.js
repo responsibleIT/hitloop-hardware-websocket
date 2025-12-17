@@ -31,12 +31,12 @@ WebMidi.enable()
 
 // Register example game states
 // sceneManager.addScene('intro', new Intro(deviceManager));
-sceneManager.addScene('greenBuilding', new GreenBuilding(deviceManager));
-sceneManager.addScene('city', new City(deviceManager));
-sceneManager.addScene('greenLights', new GreenLights(deviceManager));
-sceneManager.addScene('heatMap', new HeatMap(deviceManager));
+// sceneManager.addScene('greenBuilding', new GreenBuilding(deviceManager));
+// sceneManager.addScene('city', new City(deviceManager));
+// sceneManager.addScene('greenLights', new GreenLights(deviceManager));
+// sceneManager.addScene('heatMap', new HeatMap(deviceManager));
 sceneManager.addScene('controlTheBall', new ControlTheBall(deviceManager));
-sceneManager.addScene('music', new MusicVisualizer(deviceManager));
+// sceneManager.addScene('music', new MusicVisualizer(deviceManager));
 // sceneManager.addScene('rainyDaySingle', new RainyDaySingle(deviceManager));
 // sceneManager.addScene('particles', new Particles(deviceManager));
 // sceneManager.addScene('twoPlanets', new TwoPlanets(deviceManager));
@@ -45,6 +45,12 @@ sceneManager.addScene('music', new MusicVisualizer(deviceManager));
 // sceneManager.addScene('reveal', new GroupReveal(deviceManager));
 // sceneManager.addScene('hats', new HatsScene(deviceManager));
 // sceneManager.addScene('midiController', new MidiControllerScene(deviceManager));
+// sceneManager.addScene('flower', new Flower(deviceManager));
+sceneManager.addScene('ink', new Ink(deviceManager));
+sceneManager.addScene('inkColor', new InkColor(deviceManager));
+sceneManager.addScene('paintRace', new PaintRace(deviceManager));
+sceneManager.addScene('fountain', new Fountain(deviceManager));
+// sceneManager.addScene('ink', new Ink(deviceManager));
 
 let uiFont;
 
@@ -63,7 +69,7 @@ function setup() {
     // Connect to WebSocket server
     deviceManager.connect();
     // Default state
-    sceneManager.switchTo('greenBuilding');
+    sceneManager.switchTo('controlTheBall');
 }
 
 function draw() {

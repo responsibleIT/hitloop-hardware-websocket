@@ -1,8 +1,9 @@
-class ControlTheBall extends Scene {
+class Ink extends Scene {
   constructor(deviceManager) {
     super(deviceManager);
     this.t = 0;
-    this.P = [];
+    this.W = 720;
+    this.particles = [];
     
     // Device state management
     this.deviceRadius = 40;
@@ -17,27 +18,45 @@ class ControlTheBall extends Scene {
       SE: [0, 255, 0],     // Green
       SW: [255, 165, 0]    // Orange
     };
+    
+    this.inkLayer = null;
   }
 
   setup() {
     this.t = 0;
-    this.P = [];
+    this.particles = [];
     this._state.clear();
     this._colors.clear();
     this._lastLedHex.clear();
+    
+    // Create off-screen graphics buffer for ink
+    // This allows us to persist the ink trails without smearing the devices
+    this.inkLayer = createGraphics(width, height);
+    this.inkLayer.background(0); // Start black
   }
 
   draw() {
-    // 1. Calculate Ball Color based on devices
-    // We'll use the average color of all active devices
-    let avgR = 0, avgG = 0, avgB = 0;
-    let count = 0;
-
+    if (!this.inkLayer || this.inkLayer.width !== width || this.inkLayer.height !== height) {
+        this.inkLayer = createGraphics(width, height);
+        this.inkLayer.background(0);
+    }
+    
+    this.t++;
+    
+    // --- 1. Draw to Ink Layer ---
+    this.inkLayer.push();
+    // Fade the ink layer (trail effect)
+    this.inkLayer.noStroke();
+    this.inkLayer.fill(0, 50); // Stronger fade (was 20) to keep ink contained
+    this.inkLayer.rect(0, 0, width, height);
+    
+    this.inkLayer.noStroke();
+    
+    // Manage Devices (Physics only) & Spawn Particles
     const devices = [...this.deviceManager.getAllDevices().values()];
     const present = new Set();
     const renderList = [];
 
-    // Process devices to update physics and get their colors
     for (const dev of devices) {
       const data = dev.getSensorData?.() ?? {};
       const id = data.id ?? dev.id ?? dev;
@@ -48,94 +67,69 @@ class ControlTheBall extends Scene {
 
       const col = this._getColor(state, id);
       renderList.push({ state, col, id });
-
-      avgR += col[0];
-      avgG += col[1];
-      avgB += col[2];
-      count++;
-    }
-
-    // Default to white if no devices
-    let ballColor = [255, 255, 255];
-    if (count > 0) {
-      ballColor = [avgR / count, avgG / count, avgB / count];
-    }
-
-    // 2. Draw Ball Animation
-    // background(0, 9); // Fade effect
-    noStroke();
-    fill(0, 9);
-    rect(0, 0, width, height);
-
-    // Ball Logic Adapted
-    // Original: stroke(W, 20) -> White with alpha
-    // We use ballColor with low alpha (approx 20/255 ~ 0.08)
-    stroke(ballColor[0], ballColor[1], ballColor[2], 20);
-    strokeWeight(1);
-
-    // Spawn particles
-    // The original code: for(i=99;i--;)P.push({x:360,y:360,r:t++/9,l:99})
-    // It spawns 99 particles per frame? Let's reduce it if it's too heavy, but try to match.
-    // Also center is 360,360. We use center of screen.
-    const cx = width / 2;
-    const cy = height / 2;
-    const W = 720; // Keeping the scale factor for noise consistent
-
-    for (let i = 0; i < 50; i++) { // Reduced count slightly for performance, original was 99
-      this.P.push({
-        x: cx,
-        y: cy,
-        r: (this.t++) / 9,
-        l: 99 // life
-      });
-    }
-
-    // Update and Draw Particles
-    // P=P.filter(e=>e.l--)
-    this.P = this.P.filter(e => {
-      e.l--;
-      return e.l > 0;
-    });
-
-    if (this.P.length > 0) {
-      // Chain drawing
-      // X=P[0].x,Y=P[0].y
-      let X = this.P[0].x;
-      let Y = this.P[0].y;
-
-      // P.forEach(e=>line(X,Y,X=(e.x+=cos(e.r)*(D=(noise(X/99,Y/99,t/W)**4*25+1))),Y=(e.y+=sin(e.r)*D)))
-      for (let e of this.P) {
-        // Update position
-        // D=(noise(X/99,Y/99,t/W)**4*25+1)
-        // Note: 't' in original was global incrementing. 'this.t' is already incremented in spawn loop.
-        // But for noise we might want a slower changing value or just use this.t
-        // In original t is incremented 99 times per frame.
-        // Let's use the particle's own 'r' or global 'this.t'? 
-        // Original: t/W in noise. t is incremented in the spawn loop. 
-        // So t grows very fast.
-        
-        // Wait, in original code: r: t++/9. t is used for initial angle.
-        // And noise uses t/W. 
-        // We need to match that 't' is effectively the total particle count spawned so far.
-        
-        const noiseScale = 99;
-        const noiseVal = noise(X / noiseScale, Y / noiseScale, this.t / W);
-        const D = Math.pow(noiseVal, 4) * 25 + 1;
-        
-        const nextX = e.x + cos(e.r) * D;
-        const nextY = e.y + sin(e.r) * D;
-        
-        line(X, Y, nextX, nextY);
-        
-        e.x = nextX;
-        e.y = nextY;
-        
-        X = nextX;
-        Y = nextY;
+      
+      // Spawn Ink Particle
+      // Reduced spawn rate and spread for "little ink"
+      if (random(1) < 0.2) {
+        this.particles.push({
+          x: state.x + random(-5, 5), // Tight spawn area
+          y: state.y + random(-5, 5),
+          s: 0.1 // Start slightly later in lifecycle (smaller initial radius)
+        });
       }
     }
 
-    // 3. Render Devices (Overlay)
+    // Draw Particles to inkLayer
+    // Iterate backwards to allow removal
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.s += 0.02; // Faster lifecycle
+      
+      // Remove particle if it gets too old/small
+      if (p.s > 1.5) {
+        this.particles.splice(i, 1);
+        continue;
+      }
+
+      let T = Math.tan(p.s) * 19;
+      if (Math.abs(T) < 0.01) T = 0.01;
+      
+      this.inkLayer.fill(255, Math.min(255, Math.abs(T)));
+      
+      // Motion
+      // Reduced noise scale and speed for less spread
+      let A = noise(p.x / 360, p.y / 99, this.t / this.W) * 20;
+      
+      p.x += Math.cos(A) * 1; // Reduced speed (was 3)
+      p.y += Math.sin(A) * 1;
+      
+      // Circle
+      let r = 360 / T;
+      r = Math.min(Math.abs(r), 200); // Cap max radius (was 1000)
+      
+      this.inkLayer.circle(p.x, p.y, r);
+    }
+    
+    // Limit total particles just in case
+    const maxParticles = 500; // Reduced max count
+    if (this.particles.length > maxParticles) {
+      this.particles.splice(0, this.particles.length - maxParticles);
+    }
+    
+    // Apply Filter to inkLayer (Posterize effect on the ink)
+    // Applying filter to a graphics buffer is supported in recent p5.js
+    try {
+       this.inkLayer.filter(POSTERIZE, 3);
+    } catch(e) {}
+    
+    this.inkLayer.pop();
+    
+    // --- 2. Draw to Main Canvas ---
+    
+    // Draw the Ink Layer
+    image(this.inkLayer, 0, 0);
+    
+    // Draw Devices on top (crisp, no trails)
     this._separateOverlaps(renderList.map((r) => r.state));
 
     for (const { state, col, id } of renderList) {
@@ -161,7 +155,7 @@ class ControlTheBall extends Scene {
     }
   }
 
-  // --- HELPER METHODS ---
+  // --- HELPER METHODS (Copied from ControlTheBall) ---
 
   _getState(id) {
     let s = this._state.get(id);
@@ -178,18 +172,14 @@ class ControlTheBall extends Scene {
   }
 
   _getColor(state, id) {
-    // Determine target color based on position (quadrants)
-    // NW: Blue, NE: Red, SE: Green, SW: Orange
-    
-    // Simple quadrant check
     const isLeft = state.x < width / 2;
     const isTop = state.y < height / 2;
 
     let target;
-    if (isTop && isLeft) target = this.colors.NW;      // NW
-    else if (isTop && !isLeft) target = this.colors.NE; // NE
-    else if (!isTop && !isLeft) target = this.colors.SE; // SE
-    else target = this.colors.SW;                        // SW
+    if (isTop && isLeft) target = this.colors.NW;      
+    else if (isTop && !isLeft) target = this.colors.NE; 
+    else if (!isTop && !isLeft) target = this.colors.SE; 
+    else target = this.colors.SW;                        
 
     // Transition Logic
     const current = this._colors.get(id);
@@ -199,7 +189,7 @@ class ControlTheBall extends Scene {
     }
 
     // Smooth transition
-    const k = 0.05; // Lerp factor
+    const k = 0.05; 
     const r = current[0] + (target[0] - current[0]) * k;
     const g = current[1] + (target[1] - current[1]) * k;
     const b = current[2] + (target[2] - current[2]) * k;
@@ -211,8 +201,6 @@ class ControlTheBall extends Scene {
   }
 
   _updateMotion(state, data) {
-    // Move based on four beacons: d1=dNW, d2=dNE, d3=dSE, d4=dSW
-    // Copied from MusicVisualizer
     const d1 = Number(data?.dNW ?? data?.d1 ?? 0);
     const d2 = Number(data?.dNE ?? data?.d2 ?? 0);
     const d3 = Number(data?.dSE ?? data?.d3 ?? 0);
@@ -295,4 +283,3 @@ class ControlTheBall extends Scene {
       .join('');
   }
 }
-
