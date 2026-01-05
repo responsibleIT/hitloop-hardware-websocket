@@ -44,7 +44,7 @@ class ControlTheBall extends Scene {
     this.active = true;
     if (!this.sound) {
       // Load sound if not loaded
-      loadSound('sounds/controlTheBall-Music.mp3', (s) => {
+      loadSound('sounds/controlTheBall-Music-Techno.mp3', (s) => {
         if (!this.active) {
            s.stop();
            return; 
@@ -91,8 +91,7 @@ class ControlTheBall extends Scene {
     this.sound.loop();
     
     if (!this.fft) {
-      this.fft = new p5.FFT();
-      // FFT analyses Master output by default
+      this.fft = new p5.FFT(0.3, 512); // Low smoothing for snappy response
     }
   }
 
@@ -220,8 +219,10 @@ class ControlTheBall extends Scene {
     const W = 720; // Keeping the scale factor for noise consistent
     
     // Audio Reactivity Scaling
-    const reaction = map(this.audioEnergy || 0, 0, 255, 1, 3); 
-    // Default 1, max 3x expansion
+    // Map energy to a wider range for "exact" following
+    // 0 energy -> very slow movement
+    // High energy -> fast/explosive movement
+    const reaction = map(this.audioEnergy || 0, 0, 255, 0.1, 5, true); 
 
     for (let i = 0; i < 50; i++) { // Reduced count slightly for performance, original was 99
       this.P.push({
@@ -262,7 +263,10 @@ class ControlTheBall extends Scene {
         
         const noiseScale = 99;
         const noiseVal = noise(X / noiseScale, Y / noiseScale, this.t / W);
-        const D = (Math.pow(noiseVal, 4) * 25 * reaction + 1);
+        
+        // Direct amplitude modulation of displacement
+        // Base movement + Explosive reaction
+        const D = (Math.pow(noiseVal, 4) * 20 * reaction);
         
         const nextX = e.x + cos(e.r) * D;
         const nextY = e.y + sin(e.r) * D;
