@@ -10,17 +10,23 @@ class ControlTheBall extends Scene {
     this._colors = new Map();
     this._lastLedHex = new Map();
     
-    // Target colors for corners
+    // Target colors
     this.colors = {
-      NW: [0, 0, 255],     // Blue
-      NE: [255, 0, 0],     // Red
-      SE: [0, 255, 0],     // Green
-      SW: [255, 165, 0]    // Orange
+      LEFT: [0, 0, 255],   // Blue
+      RIGHT: [255, 0, 0]   // Red
     };
     
     // Ball position state
     this.ballX = 0;
     this.ballY = 0;
+    
+    // Audio State
+    this.sound = null;
+    this.lp = null;
+    this.hp = null;
+    this.fft = null;
+    this.active = false;
+    this.audioEnergy = 0;
   }
 
   setup() {
@@ -33,6 +39,61 @@ class ControlTheBall extends Scene {
     // Initialize ball to center
     this.ballX = width / 2;
     this.ballY = height / 2;
+    
+    // Audio Init
+    this.active = true;
+    if (!this.sound) {
+      // Load sound if not loaded
+      loadSound('sounds/controlTheBall-Music.mp3', (s) => {
+        if (!this.active) {
+           s.stop();
+           return; 
+        }
+        this.sound = s;
+        this._initAudio();
+      });
+    } else {
+      // Already loaded, just init
+      this._initAudio();
+    }
+  }
+
+  teardown() {
+    this.active = false;
+    if (this.sound) {
+      this.sound.stop();
+      this.sound.disconnect();
+    }
+    // Note: Filters persist but are disconnected from source
+  }
+
+  _initAudio() {
+    if (!this.sound) return;
+    
+    this.sound.disconnect(); // Disconnect from master
+    
+    if (!this.lp) {
+      this.lp = new p5.LowPass();
+      this.lp.freq(200); // Low frequency for Kicks
+      this.lp.res(1);
+    }
+    
+    if (!this.hp) {
+      this.hp = new p5.HighPass();
+      this.hp.freq(3000); // High frequency for Hi-Hats
+      this.hp.res(1);
+    }
+    
+    // Parallel processing: Source -> LP -> Master AND Source -> HP -> Master
+    this.sound.connect(this.lp);
+    this.sound.connect(this.hp);
+    
+    this.sound.loop();
+    
+    if (!this.fft) {
+      this.fft = new p5.FFT();
+      // FFT analyses Master output by default
+    }
   }
 
   draw() {
@@ -96,6 +157,44 @@ class ControlTheBall extends Scene {
       // Keep targetY vertically centered
     }
     
+    // Audio Filtering & Analysis
+    if (this.sound && this.sound.isPlaying()) {
+      // Calculate balance (-1 for Left/Blue, 1 for Right/Red)
+      // avgDx is roughly -300 to 300
+      let balance = 0;
+      if (count > 0) {
+          const avgDx = totalDx / count;
+          balance = map(avgDx, -300, 300, -1, 1, true);
+      }
+      
+      // Map balance to volume of filters
+      // Left (-1): Blue -> Hi-Hats (HP) louder
+      // Right (1): Red -> Kicks (LP) louder
+      
+      const hpGain = map(balance, -1, 1, 1, 0); // Left=1, Right=0
+      const lpGain = map(balance, -1, 1, 0, 1); // Left=0, Right=1
+      
+      this.hp.amp(hpGain);
+      this.lp.amp(lpGain);
+      
+      // Analyze Frequency for Visuals
+      if (this.fft) {
+        this.fft.analyze();
+        // If on right (Red/Kicks), react to Bass. If on Left (Blue/HiHats), react to Treble.
+        // Or blend them?
+        const bass = this.fft.getEnergy("bass");
+        const treble = this.fft.getEnergy("treble");
+        
+        // Pick dominant energy based on position
+        // If balance < 0 (Left), use treble. If > 0 (Right), use bass.
+        // Or mix:
+        const tFactor = map(balance, -1, 1, 1, 0); // 1 at Left
+        const bFactor = map(balance, -1, 1, 0, 1); // 1 at Right
+        
+        this.audioEnergy = (bass * bFactor) + (treble * tFactor);
+      }
+    }
+
     // Smooth movement
     this.ballX = lerp(this.ballX, targetX, 0.05);
     this.ballY = lerp(this.ballY, targetY, 0.05);
@@ -119,6 +218,10 @@ class ControlTheBall extends Scene {
     const cx = this.ballX;
     const cy = this.ballY;
     const W = 720; // Keeping the scale factor for noise consistent
+    
+    // Audio Reactivity Scaling
+    const reaction = map(this.audioEnergy || 0, 0, 255, 1, 3); 
+    // Default 1, max 3x expansion
 
     for (let i = 0; i < 50; i++) { // Reduced count slightly for performance, original was 99
       this.P.push({
@@ -159,7 +262,7 @@ class ControlTheBall extends Scene {
         
         const noiseScale = 99;
         const noiseVal = noise(X / noiseScale, Y / noiseScale, this.t / W);
-        const D = Math.pow(noiseVal, 4) * 25 + 1;
+        const D = (Math.pow(noiseVal, 4) * 25 * reaction + 1);
         
         const nextX = e.x + cos(e.r) * D;
         const nextY = e.y + sin(e.r) * D;
@@ -217,18 +320,11 @@ class ControlTheBall extends Scene {
   }
 
   _getColor(state, id) {
-    // Determine target color based on position (quadrants)
-    // NW: Blue, NE: Red, SE: Green, SW: Orange
+    // Determine target color based on position (Left vs Right)
+    // Left: Blue, Right: Red
     
-    // Simple quadrant check
     const isLeft = state.x < width / 2;
-    const isTop = state.y < height / 2;
-
-    let target;
-    if (isTop && isLeft) target = this.colors.NW;      // NW
-    else if (isTop && !isLeft) target = this.colors.NE; // NE
-    else if (!isTop && !isLeft) target = this.colors.SE; // SE
-    else target = this.colors.SW;                        // SW
+    const target = isLeft ? this.colors.LEFT : this.colors.RIGHT;
 
     // Transition Logic
     const current = this._colors.get(id);
