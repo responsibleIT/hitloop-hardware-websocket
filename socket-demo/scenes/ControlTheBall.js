@@ -17,6 +17,10 @@ class ControlTheBall extends Scene {
       SE: [0, 255, 0],     // Green
       SW: [255, 165, 0]    // Orange
     };
+    
+    // Ball position state
+    this.ballX = 0;
+    this.ballY = 0;
   }
 
   setup() {
@@ -25,6 +29,10 @@ class ControlTheBall extends Scene {
     this._state.clear();
     this._colors.clear();
     this._lastLedHex.clear();
+    
+    // Initialize ball to center
+    this.ballX = width / 2;
+    this.ballY = height / 2;
   }
 
   draw() {
@@ -32,6 +40,7 @@ class ControlTheBall extends Scene {
     // We'll use the average color of all active devices
     let avgR = 0, avgG = 0, avgB = 0;
     let count = 0;
+    let totalDx = 0;
 
     const devices = [...this.deviceManager.getAllDevices().values()];
     const present = new Set();
@@ -42,6 +51,16 @@ class ControlTheBall extends Scene {
       const data = dev.getSensorData?.() ?? {};
       const id = data.id ?? dev.id ?? dev;
       present.add(id);
+      
+      // Accumulate beacon influence for ball movement
+      const d1 = Number(data?.dNW ?? data?.d1 ?? 0);
+      const d2 = Number(data?.dNE ?? data?.d2 ?? 0);
+      const d3 = Number(data?.dSE ?? data?.d3 ?? 0);
+      const d4 = Number(data?.dSW ?? data?.d4 ?? 0);
+      
+      // Horizontal only: Right (d2+d3) - Left (d1+d4)
+      const dx = (d2 + d3) - (d1 + d4);
+      totalDx += dx;
 
       const state = this._getState(id);
       this._updateMotion(state, data);
@@ -60,6 +79,26 @@ class ControlTheBall extends Scene {
     if (count > 0) {
       ballColor = [avgR / count, avgG / count, avgB / count];
     }
+    
+    // Update Ball Position based on beacon aggregate
+    let targetX = width / 2;
+    let targetY = height / 2;
+    
+    if (count > 0) {
+      const avgDx = totalDx / count;
+      
+      // Map the average beacon delta (approx -510 to 510) to screen offset
+      // We'll use a mapping that allows the ball to reach the edges
+      const maxDelta = 300; // Sensitivity factor
+      const offsetX = map(avgDx, -maxDelta, maxDelta, -width / 2 + 50, width / 2 - 50, true);
+      
+      targetX = width / 2 + offsetX;
+      // Keep targetY vertically centered
+    }
+    
+    // Smooth movement
+    this.ballX = lerp(this.ballX, targetX, 0.05);
+    this.ballY = lerp(this.ballY, targetY, 0.05);
 
     // 2. Draw Ball Animation
     // background(0, 9); // Fade effect
@@ -77,8 +116,8 @@ class ControlTheBall extends Scene {
     // The original code: for(i=99;i--;)P.push({x:360,y:360,r:t++/9,l:99})
     // It spawns 99 particles per frame? Let's reduce it if it's too heavy, but try to match.
     // Also center is 360,360. We use center of screen.
-    const cx = width / 2;
-    const cy = height / 2;
+    const cx = this.ballX;
+    const cy = this.ballY;
     const W = 720; // Keeping the scale factor for noise consistent
 
     for (let i = 0; i < 50; i++) { // Reduced count slightly for performance, original was 99

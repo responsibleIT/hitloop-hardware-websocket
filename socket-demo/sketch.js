@@ -46,9 +46,9 @@ sceneManager.addScene('controlTheBall', new ControlTheBall(deviceManager));
 // sceneManager.addScene('hats', new HatsScene(deviceManager));
 // sceneManager.addScene('midiController', new MidiControllerScene(deviceManager));
 // sceneManager.addScene('flower', new Flower(deviceManager));
-sceneManager.addScene('ink', new Ink(deviceManager));
-sceneManager.addScene('inkColor', new InkColor(deviceManager));
-sceneManager.addScene('paintRace', new PaintRace(deviceManager));
+// sceneManager.addScene('ink', new Ink(deviceManager));
+// sceneManager.addScene('inkColor', new InkColor(deviceManager));
+// sceneManager.addScene('paintRace', new PaintRace(deviceManager));
 sceneManager.addScene('fountain', new Fountain(deviceManager));
 // sceneManager.addScene('ink', new Ink(deviceManager));
 
