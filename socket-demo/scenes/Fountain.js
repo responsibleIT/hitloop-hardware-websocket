@@ -4,8 +4,8 @@ class Fountain extends Scene {
       this.t = 0;
       this.particles = [];
       this.fountainLayer = null;
-      // We'll manage the particle buffer manually to match the ring buffer logic
-      this.P = new Array(5000); 
+      // Reduced particle buffer size for performance
+      this.P = new Array(3000); 
       this.t_counter = 0; // Separate counter for the logic
       
       // Device state for circles
@@ -19,21 +19,78 @@ class Fountain extends Scene {
         DOWN: [0, 0, 255],      // Blue
         LEFT: [0, 255, 0]       // Green
       };
+
+      // Audio State
+      this.sound = null;
+      this.fft = null;
+      this.active = false;
+      this.audioEnergy = 0;
     }
   
     setup() {
       this.t = 0;
       this.t_counter = 0;
-      this.P = new Array(5000); 
+      this.P = new Array(3000); 
       this._state.clear();
       this._colors.clear();
       this._lastLedHex.clear();
       
       this.fountainLayer = createGraphics(width, height);
       this.fountainLayer.background(0);
+
+      // Audio Init
+      this.active = true;
+      if (!this.sound) {
+        // Load sound if not loaded
+        loadSound('sounds/fountain-classic-music.mp3', (s) => {
+          if (!this.active) {
+             s.stop();
+             return; 
+          }
+          this.sound = s;
+          this._initAudio();
+        });
+      } else {
+        // Already loaded, just init
+        this._initAudio();
+      }
+    }
+
+    teardown() {
+        this.active = false;
+        if (this.sound) {
+            this.sound.stop();
+            this.sound.disconnect();
+        }
+    }
+
+    _initAudio() {
+        if (!this.sound) return;
+        
+        this.sound.disconnect(); // Disconnect from master
+        this.sound.connect(); // Connect back to master (default)
+        
+        this.sound.loop();
+        
+        if (!this.fft) {
+            this.fft = new p5.FFT(0.8, 512); // Higher smoothing for smoother flow
+        }
+        this.fft.setInput(this.sound);
     }
   
     draw() {
+      // Audio Analysis
+      let bass = 0, lowMid = 0, mid = 0, highMid = 0, treble = 0;
+      if (this.fft && this.sound && this.sound.isPlaying()) {
+          this.fft.analyze();
+          bass = this.fft.getEnergy("bass"); 
+          lowMid = this.fft.getEnergy("lowMid");
+          mid = this.fft.getEnergy("mid"); 
+          highMid = this.fft.getEnergy("highMid");
+          treble = this.fft.getEnergy("treble");
+          this.audioEnergy = bass;
+      }
+
       if (!this.fountainLayer || this.fountainLayer.width !== width || this.fountainLayer.height !== height) {
           this.fountainLayer = createGraphics(width, height);
           this.fountainLayer.background(0);
@@ -42,16 +99,14 @@ class Fountain extends Scene {
       // --- 1. Draw Fountains to Layer ---
       this.fountainLayer.push();
       this.fountainLayer.noStroke();
-      this.fountainLayer.fill(0, 9); 
+      this.fountainLayer.fill(0, 50); // Increased fade speed for smoother trails without blur
       this.fountainLayer.rect(0, 0, width, height);
       
       this.fountainLayer.strokeWeight(1);
       
-      try {
-         this.fountainLayer.filter(BLUR, 3);
-      } catch(e) {}
+      // Removed expensive BLUR filter
       
-      const W = 720; 
+      const W = 720;  
       const N = noise;
       const scaleX = width / 720;
       const scaleY = height / 720;
@@ -84,47 +139,80 @@ class Fountain extends Scene {
           fountainColors[i] = userColors[index];
       }
       
-      // Sequential Splash Logic
-      const cycleSpeed = 20;
-      let activeFountain = Math.floor(this.t / cycleSpeed) % 10 + 1;
-      let count = 29;
+      // Sequential Splash Logic removed.
+      // Multi-band Dancing Fountains
       
-      for(let i = count; i > 0; i--) {
-          let idx = this.t_counter % 5000;
-          this.t_counter++;
+      for(let T = 1; T <= 10; T++) {
+          // Determine band for this fountain (Mirrored Stage Layout - 5 bands)
+          // 1 & 10 : Bass
+          // 2 & 9  : LowMid
+          // 3 & 8  : Mid
+          // 4 & 7  : HighMid
+          // 5 & 6  : Treble
           
-          let t_val = this.t_counter; 
-          let T = activeFountain;
+          let localEnergy = 0;
+          let threshold = 0;
           
-          // Store color for this particle!
-          // We need to extend the particle object to store color
-          // We can't easily change the P structure if it's reused, 
-          // but we redraw every frame from P. 
-          // Wait, P is a buffer. If we change color of active fountain NOW, 
-          // old particles in buffer from previous fountains retain their old drawing color?
-          // No, the drawing loop below sets stroke ONCE for the layer.
-          // The requested effect "water will be blue" implies per-particle or per-fountain color.
-          // To support multi-colored fountains simultaneously, we must store color in P.
+          if (T === 1 || T === 10) {
+             localEnergy = bass;
+             threshold = 200; // Increased threshold for "punchier" bass response
+          } else if (T === 2 || T === 9) {
+             localEnergy = lowMid;
+             threshold = 160; 
+          } else if (T === 3 || T === 8) {
+             localEnergy = mid;
+             threshold = 140; 
+          } else if (T === 4 || T === 7) {
+             localEnergy = highMid;
+             threshold = 120; 
+          } else { // 5 or 6
+             localEnergy = treble;
+             threshold = 100; 
+          }
           
-          let col = fountainColors[T-1];
+          // "Turn off sometimes" - check threshold
+          // Use exponential drop-off for sharper cuts
+          if (localEnergy < threshold) continue;
+
+          // Calculate particles and height based on localEnergy
+          // Sharper curve for more explosive reaction
+          const count = Math.floor(map(Math.pow(localEnergy/255, 2), 0, 1, 2, 15));
           
-          let S = t_val / 2000.0;
-          let term1 = N(S, T) * 5;
-          let term2 = random(1);
-          let R = 1.7 + term1 + term2;
-          
-          let noiseCheck = 9; 
-          let b_val = (Math.sin(R) * 4 - N(S, T, 9) * noiseCheck) * 1.3;
-          
-          if (b_val > -5) b_val -= 5; 
-          
-          this.P[idx] = {
-              x: T * (720 / 11),
-              y: W,
-              a: Math.cos(R),
-              b: b_val,
-              c: col // Store color [r,g,b]
-          };
+          const heightBoost = 2.0; 
+          const energyFactor = map(localEnergy, threshold, 255, 1.0, heightBoost);
+
+          for(let i = 0; i < count; i++) {
+              let idx = this.t_counter % 5000;
+              this.t_counter++;
+              
+              let t_val = this.t_counter; 
+              
+              // Store color for this particle!
+              let col = fountainColors[T-1];
+              
+              let S = t_val / 2000.0;
+              let term1 = N(S, T) * 5;
+              let term2 = random(1);
+              let R = 1.7 + term1 + term2;
+              
+              let noiseCheck = 9; 
+              // Reduced base velocity multiplier (was 1.3)
+              let b_val = (Math.sin(R) * 4 - N(S, T, 9) * noiseCheck) * 0.8;
+              
+              // Apply energy boost to height
+              b_val *= energyFactor;
+    
+              // Reduced minimum upward kick (was -5)
+              if (b_val > -3) b_val -= 3; 
+              
+              this.P[idx] = {
+                  x: T * (720 / 11),
+                  y: W,
+                  a: Math.cos(R),
+                  b: b_val,
+                  c: col // Store color [r,g,b]
+              };
+          }
       }
       
       for(let k = 0; k < this.P.length; k++) {
