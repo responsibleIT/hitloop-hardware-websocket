@@ -181,6 +181,18 @@ class Fountain extends Scene {
           const heightBoost = 2.0; 
           const energyFactor = map(localEnergy, threshold, 255, 1.0, heightBoost);
 
+          // Rhythmic Sway Calculation
+          // Speed increases with bass intensity
+          let swaySpeed = 0.08 + (bass * 0.0005); 
+          // Amplitude based on local energy band
+          let swayAmp = map(localEnergy, 0, 255, 0.2, 1.5);
+          
+          // Sync instruments: Calculate band index (0-4) for mirrored fountains
+          let bandIndex = (T <= 5) ? (T - 1) : (10 - T);
+
+          // Calculate sway angle: Sine wave + phase shift per BAND
+          let sway = Math.sin(this.t * swaySpeed + bandIndex * 0.8) * swayAmp;
+
           for(let i = 0; i < count; i++) {
               let idx = this.t_counter % 5000;
               this.t_counter++;
@@ -193,7 +205,8 @@ class Fountain extends Scene {
               let S = t_val / 2000.0;
               let term1 = N(S, T) * 5;
               let term2 = random(1);
-              let R = 1.7 + term1 + term2;
+              // Apply sway to direction
+              let R = 1.7 + term1 + term2 + sway;
               
               let noiseCheck = 9; 
               // Reduced base velocity multiplier (was 1.3)
