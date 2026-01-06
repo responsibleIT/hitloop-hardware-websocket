@@ -19,6 +19,7 @@ class ControlTheBall extends Scene {
     // Ball position state
     this.ballX = 0;
     this.ballY = 0;
+    this.rotationAngle = 0;
     
     // Audio State
     this.sound = null;
@@ -39,6 +40,7 @@ class ControlTheBall extends Scene {
     // Initialize ball to center
     this.ballX = width / 2;
     this.ballY = height / 2;
+    this.rotationAngle = 0;
     
     // Audio Init
     this.active = true;
@@ -101,6 +103,7 @@ class ControlTheBall extends Scene {
     let avgR = 0, avgG = 0, avgB = 0;
     let count = 0;
     let totalDx = 0;
+    let totalAx = 0;
 
     const devices = [...this.deviceManager.getAllDevices().values()];
     const present = new Set();
@@ -121,6 +124,12 @@ class ControlTheBall extends Scene {
       // Horizontal only: Right (d2+d3) - Left (d1+d4)
       const dx = (d2 + d3) - (d1 + d4);
       totalDx += dx;
+
+      // Accumulate Tilt for Rotation
+      const rawAx = Number(data.ax ?? data.aX ?? data.accX ?? 128);
+      // Map 0..255 to -1..1 for rotation speed control
+      const ax = (rawAx / 255.0) * 2.0 - 1.0; 
+      totalAx += ax;
 
       const state = this._getState(id);
       this._updateMotion(state, data);
@@ -143,9 +152,11 @@ class ControlTheBall extends Scene {
     // Update Ball Position based on beacon aggregate
     let targetX = width / 2;
     let targetY = height / 2;
+    let avgAx = 0;
     
     if (count > 0) {
       const avgDx = totalDx / count;
+      avgAx = totalAx / count;
       
       // Map the average beacon delta (approx -510 to 510) to screen offset
       // We'll use a mapping that allows the ball to reach the edges
@@ -156,6 +167,11 @@ class ControlTheBall extends Scene {
       // Keep targetY vertically centered
     }
     
+    // Update Rotation
+    // Tilt determines speed of rotation. 
+    // Left tilt (neg) -> Counter-Clockwise? Right (pos) -> Clockwise
+    this.rotationAngle += avgAx * 0.02; // Reduced speed factor from 0.1 to 0.02
+
     // Audio Filtering & Analysis
     if (this.sound && this.sound.isPlaying()) {
       // Calculate balance (-1 for Left/Blue, 1 for Right/Red)
@@ -241,6 +257,11 @@ class ControlTheBall extends Scene {
     });
 
     if (this.P.length > 0) {
+      push();
+      translate(this.ballX, this.ballY);
+      rotate(this.rotationAngle);
+      translate(-this.ballX, -this.ballY);
+
       // Chain drawing
       // X=P[0].x,Y=P[0].y
       let X = this.P[0].x;
@@ -279,6 +300,7 @@ class ControlTheBall extends Scene {
         X = nextX;
         Y = nextY;
       }
+      pop();
     }
 
     // 3. Render Devices (Overlay)
