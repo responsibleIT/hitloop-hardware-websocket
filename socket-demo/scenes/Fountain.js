@@ -142,6 +142,86 @@ class Fountain extends Scene {
       // Sequential Splash Logic removed.
       // Multi-band Dancing Fountains
       
+      // --- Participant Position Detection ---
+      // Check participant positions to adjust water intensity and speed
+      const allDevices = [...this.deviceManager.getAllDevices().values()];
+      const screenCenter = width / 2;
+      let participantsOnLeft = 0;
+      let participantsOnRight = 0;
+      
+      // Pre-calculate colors to check if all participants share the same color
+      // We need to get colors first to check them
+      const participantColors = [];
+      for (const dev of allDevices) {
+        const data = dev.getSensorData?.() ?? {};
+        const id = data.id ?? dev.id ?? dev;
+        const state = this._getState(id);
+        const tilt = this._getTilt(data);
+        const col = this._getColor(state, id, tilt);
+        participantColors.push({ id, col, state });
+        
+        if (state.x < screenCenter) {
+          participantsOnLeft++;
+        } else {
+          participantsOnRight++;
+        }
+      }
+      
+      // Check if all participants share the same color (red, white, green, or blue)
+      let waterTextureMode = null; // null = normal, 'red', 'white', 'green', 'blue' = special textures
+      if (participantColors.length > 0) {
+        let allRed = true;
+        let allWhite = true;
+        let allGreen = true;
+        let allBlue = true;
+        
+        for (const { col } of participantColors) {
+          if (!col) {
+            allRed = allWhite = allGreen = allBlue = false;
+            break;
+          }
+          
+          const r = col[0];
+          const g = col[1];
+          const b = col[2];
+          
+          // Check red: high red, low green/blue
+          if (r < 180 || g > 50 || b > 50) allRed = false;
+          
+          // Check white: high red, green, and blue
+          if (r < 200 || g < 200 || b < 200) allWhite = false;
+          
+          // Check green: high green, low red/blue
+          if (g < 180 || r > 50 || b > 50) allGreen = false;
+          
+          // Check blue: high blue, low red/green
+          if (b < 180 || r > 50 || g > 50) allBlue = false;
+        }
+        
+        // Determine which texture mode to use
+        if (allRed) waterTextureMode = 'red';
+        else if (allWhite) waterTextureMode = 'white';
+        else if (allGreen) waterTextureMode = 'green';
+        else if (allBlue) waterTextureMode = 'blue';
+      }
+      
+      // Calculate multipliers based on participant distribution
+      // More on left = more water and faster
+      // More on right = less water and slower
+      const totalParticipants = participantsOnLeft + participantsOnRight;
+      let particleMultiplier = 1.0;
+      let speedMultiplier = 1.0;
+      
+      if (totalParticipants > 0) {
+        const leftRatio = participantsOnLeft / totalParticipants;
+        const rightRatio = participantsOnRight / totalParticipants;
+        
+        // Left participants increase water (max 2x) and speed (max 1.5x)
+        // Right participants decrease water (min 0.5x) and speed (min 0.7x)
+        particleMultiplier = map(leftRatio, 0, 1, 0.5, 2.0);
+        speedMultiplier = map(leftRatio, 0, 1, 0.7, 1.5);
+      }
+      
       for(let T = 1; T <= 10; T++) {
           // Determine band for this fountain (Mirrored Stage Layout - 5 bands)
           // 1 & 10 : Bass
@@ -176,7 +256,9 @@ class Fountain extends Scene {
 
           // Calculate particles and height based on localEnergy
           // Sharper curve for more explosive reaction
-          const count = Math.floor(map(Math.pow(localEnergy/255, 2), 0, 1, 5, 40));
+          // Apply particle multiplier based on participant positions
+          const baseCount = Math.floor(map(Math.pow(localEnergy/255, 2), 0, 1, 5, 40));
+          const count = Math.floor(baseCount * particleMultiplier);
           
           const heightBoost = 2.5; 
           const energyFactor = map(localEnergy, threshold, 255, 1.0, heightBoost);
@@ -224,6 +306,10 @@ class Fountain extends Scene {
               
               // Apply energy boost to height
               b_val *= energyFactor;
+              
+              // Apply speed multiplier based on participant positions
+              // More participants on left = faster water
+              b_val *= speedMultiplier;
     
               // Increased minimum upward kick (was -3)
               if (b_val > -4) b_val -= 4; 
@@ -251,8 +337,72 @@ class Fountain extends Scene {
           
           // Set stroke color per particle
           let c = e.c || [255, 255, 255];
-          this.fountainLayer.stroke(c[0], c[1], c[2]);
-          this.fountainLayer.point(sx, sy);
+          
+          if (waterTextureMode === 'blue') {
+              // Blue texture: thicker strokes with glow effect
+              this.fountainLayer.strokeWeight(2);
+              this.fountainLayer.stroke(c[0], c[1], c[2], 200);
+              this.fountainLayer.point(sx, sy);
+              
+              // Add glow effect with surrounding points
+              this.fountainLayer.strokeWeight(1);
+              this.fountainLayer.stroke(c[0], c[1], c[2], 100);
+              this.fountainLayer.point(sx + 1, sy);
+              this.fountainLayer.point(sx - 1, sy);
+              this.fountainLayer.point(sx, sy + 1);
+              this.fountainLayer.point(sx, sy - 1);
+          } else if (waterTextureMode === 'red') {
+              // Red texture: fiery/sparkly effect with multiple bright points
+              this.fountainLayer.strokeWeight(2);
+              this.fountainLayer.stroke(c[0], c[1], c[2], 255);
+              this.fountainLayer.point(sx, sy);
+              
+              // Add sparkle effect
+              this.fountainLayer.strokeWeight(1);
+              this.fountainLayer.stroke(c[0], Math.min(255, c[1] + 50), Math.min(255, c[2] + 30), 150);
+              this.fountainLayer.point(sx + 0.5, sy - 0.5);
+              this.fountainLayer.point(sx - 0.5, sy + 0.5);
+              this.fountainLayer.point(sx + 0.7, sy + 0.3);
+              this.fountainLayer.point(sx - 0.7, sy - 0.3);
+          } else if (waterTextureMode === 'white') {
+              // White texture: bright, glowing effect
+              this.fountainLayer.strokeWeight(3);
+              this.fountainLayer.stroke(c[0], c[1], c[2], 255);
+              this.fountainLayer.point(sx, sy);
+              
+              // Bright glow halo
+              this.fountainLayer.strokeWeight(2);
+              this.fountainLayer.stroke(c[0], c[1], c[2], 180);
+              this.fountainLayer.point(sx + 1, sy);
+              this.fountainLayer.point(sx - 1, sy);
+              this.fountainLayer.point(sx, sy + 1);
+              this.fountainLayer.point(sx, sy - 1);
+              
+              this.fountainLayer.strokeWeight(1);
+              this.fountainLayer.stroke(c[0], c[1], c[2], 120);
+              this.fountainLayer.point(sx + 1.5, sy);
+              this.fountainLayer.point(sx - 1.5, sy);
+              this.fountainLayer.point(sx, sy + 1.5);
+              this.fountainLayer.point(sx, sy - 1.5);
+          } else if (waterTextureMode === 'green') {
+              // Green texture: organic, flowing effect with soft trails
+              this.fountainLayer.strokeWeight(2);
+              this.fountainLayer.stroke(c[0], c[1], c[2], 180);
+              this.fountainLayer.point(sx, sy);
+              
+              // Soft flowing effect
+              this.fountainLayer.strokeWeight(1.5);
+              this.fountainLayer.stroke(c[0], c[1], c[2], 120);
+              this.fountainLayer.point(sx + 0.8, sy + 0.5);
+              this.fountainLayer.point(sx - 0.8, sy + 0.5);
+              this.fountainLayer.point(sx + 0.5, sy + 0.8);
+              this.fountainLayer.point(sx - 0.5, sy + 0.8);
+          } else {
+              // Normal texture: thin single point
+              this.fountainLayer.strokeWeight(1);
+              this.fountainLayer.stroke(c[0], c[1], c[2]);
+              this.fountainLayer.point(sx, sy);
+          }
       }
       
       this.fountainLayer.pop();
