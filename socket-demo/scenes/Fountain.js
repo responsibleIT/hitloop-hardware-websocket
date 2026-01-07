@@ -73,7 +73,7 @@ class Fountain extends Scene {
         this.sound.loop();
         
         if (!this.fft) {
-            this.fft = new p5.FFT(0.8, 512); // Higher smoothing for smoother flow
+            this.fft = new p5.FFT(0.5, 512); // Lower smoothing for snappier, more synced beat detection
         }
         this.fft.setInput(this.sound);
     }
@@ -99,7 +99,7 @@ class Fountain extends Scene {
       // --- 1. Draw Fountains to Layer ---
       this.fountainLayer.push();
       this.fountainLayer.noStroke();
-      this.fountainLayer.fill(0, 50); // Increased fade speed for smoother trails without blur
+      this.fountainLayer.fill(0, 80); // Higher alpha for faster water disappearance
       this.fountainLayer.rect(0, 0, width, height);
       
       this.fountainLayer.strokeWeight(1);
@@ -155,19 +155,19 @@ class Fountain extends Scene {
           
           if (T === 1 || T === 10) {
              localEnergy = bass;
-             threshold = 200; // Increased threshold for "punchier" bass response
+             threshold = 220; // Increased threshold for "punchier" bass response
           } else if (T === 2 || T === 9) {
              localEnergy = lowMid;
-             threshold = 160; 
+             threshold = 80; 
           } else if (T === 3 || T === 8) {
              localEnergy = mid;
-             threshold = 140; 
+             threshold = 160; 
           } else if (T === 4 || T === 7) {
              localEnergy = highMid;
-             threshold = 120; 
+             threshold = 60; 
           } else { // 5 or 6
              localEnergy = treble;
-             threshold = 100; 
+             threshold = 120; 
           }
           
           // "Turn off sometimes" - check threshold
@@ -176,21 +176,31 @@ class Fountain extends Scene {
 
           // Calculate particles and height based on localEnergy
           // Sharper curve for more explosive reaction
-          const count = Math.floor(map(Math.pow(localEnergy/255, 2), 0, 1, 2, 15));
+          const count = Math.floor(map(Math.pow(localEnergy/255, 2), 0, 1, 5, 40));
           
-          const heightBoost = 2.0; 
+          const heightBoost = 2.5; 
           const energyFactor = map(localEnergy, threshold, 255, 1.0, heightBoost);
 
+          // Melody detection - mid and highMid frequencies typically contain melodies
+          const melodyEnergy = (mid + highMid) / 2;
+          const melodyIntensity = map(melodyEnergy, 0, 255, 0, 1);
+
           // Rhythmic Sway Calculation
-          // Speed increases with bass intensity
-          let swaySpeed = 0.08 + (bass * 0.0005); 
-          // Amplitude based on local energy band
-          let swayAmp = map(localEnergy, 0, 255, 0.2, 1.5);
+          // Slower speed for more graceful left-right movement
+          let baseSpeed = 0.03 + (bass * 0.0002); // Reduced base speed
+          let melodySpeedBoost = melodyIntensity * 0.01; // Reduced melody speed boost
+          let swaySpeed = baseSpeed + melodySpeedBoost;
+          
+          // Amplitude based on local energy band, enhanced by melody presence
+          let baseAmp = map(localEnergy, 0, 255, 0.2, 1.5);
+          let melodyAmpBoost = melodyIntensity * 1.2; // Significant boost when melodies are present
+          let swayAmp = baseAmp + melodyAmpBoost;
           
           // Sync instruments: Calculate band index (0-4) for mirrored fountains
           let bandIndex = (T <= 5) ? (T - 1) : (10 - T);
 
           // Calculate sway angle: Sine wave + phase shift per BAND
+          // More pronounced dancing when melodies are present
           let sway = Math.sin(this.t * swaySpeed + bandIndex * 0.8) * swayAmp;
 
           for(let i = 0; i < count; i++) {
@@ -209,14 +219,14 @@ class Fountain extends Scene {
               let R = 1.7 + term1 + term2 + sway;
               
               let noiseCheck = 9; 
-              // Reduced base velocity multiplier (was 1.3)
-              let b_val = (Math.sin(R) * 4 - N(S, T, 9) * noiseCheck) * 0.8;
+              // Increased base velocity multiplier (was 0.8)
+              let b_val = (Math.sin(R) * 4 - N(S, T, 9) * noiseCheck) * 1.0;
               
               // Apply energy boost to height
               b_val *= energyFactor;
     
-              // Reduced minimum upward kick (was -5)
-              if (b_val > -3) b_val -= 3; 
+              // Increased minimum upward kick (was -3)
+              if (b_val > -4) b_val -= 4; 
               
               this.P[idx] = {
                   x: T * (720 / 11),
