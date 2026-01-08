@@ -209,8 +209,9 @@ docker-compose logs client
 ### Service Health Checks
 
 ```bash
-# Check WebSocket server health
-curl http://localhost:5003/health
+# Check WebSocket server (uses ping/pong via WebSocket, not HTTP)
+# Use a WebSocket client or check logs:
+docker-compose logs socket
 
 # Check CDN server
 curl http://localhost:5008/

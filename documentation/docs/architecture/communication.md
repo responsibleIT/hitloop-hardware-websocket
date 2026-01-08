@@ -60,7 +60,13 @@ cmd:<target>:<command>:<parameters>
 ```
 - **Purpose**: Device sensor data in hex format
 - **Format**: Device ID (4 chars) + sensor data (16 chars)
-- **Example**: `1234a1b2c3d4e5f678901234567890`
+  - Device ID: 4 hex chars (2 bytes, big-endian)
+  - Accelerometer: 6 hex chars (ax, ay, az - 2 chars each)
+  - BLE RSSI: 8 hex chars (dNW, dNE, dSW, dSE - 2 chars each)
+  - Color state: 2 hex chars
+  - Motor state: 2 hex chars
+  - Reserved: 2 hex chars
+- **Example**: `1234a1b2c3d4e5f678901234567890FF00AA`
 
 #### 5. Health Check
 ```
@@ -79,16 +85,36 @@ Commands follow a simple `command:parameters` format:
 <command>:<parameters>
 ```
 
+### Command Registry Integration
+
+The WebSocket server loads command definitions from the CDN server's `commands.json` file on startup. This enables dynamic command registration without server restarts.
+
+**Command Registry Location**: `{CDN_BASE_URL}/static/commands.json`
+
+**Registry Structure**:
+```json
+{
+  "commands": {
+    "command_name": {
+      "handler": "handler_name",
+      "parameters": ["param1", "param2"],
+      "description": "Command description",
+      "examples": ["example1", "example2"]
+    }
+  }
+}
+```
+
 ### Available Commands
 
 Based on the command registry in `commands.json`:
 
 #### LED Commands
-- `led:<color>` - Set LED color (hex format like `ff0000`)
+- `led:<color>` - Set LED color (hex format like `ff0000`, or named colors like `red`, `green`, `blue`)
 - `pattern:<pattern>` - Set LED pattern (`breathing`, `heartbeat`, `cycle`, `spring`, `off`)
 - `brightness:<level>` - Set brightness (0-255)
 - `reset` - Reset LED pattern
-- `spring_param:<hex>` - Set spring physics parameters (6 hex chars)
+- `spring_param:<hex>` - Set spring physics parameters (6 hex chars: 2 for spring constant, 2 for damping, 2 for mass)
 
 #### Vibration Commands
 - `vibrate:<duration>` - Vibrate for specified milliseconds
@@ -171,9 +197,10 @@ graph LR
 - **Unknown Command**: Error response sent
 
 ### Command Errors
-- **Invalid Format**: `cmd:error:invalid_format`
-- **Unknown Command**: `cmd:error:unknown_command`
-- **Missing Parameters**: `cmd:error:missing_parameters`
+- **Invalid Format**: `cmd:error:invalid_format` - Command message format is incorrect
+- **Unknown Command**: `cmd:error:unknown_command` - Command not found in registry
+- **Missing Parameters**: `cmd:error:missing_parameters` - Required parameters not provided
+- **Command Result**: `cmd:result:<result>` - Command execution result (e.g., `cmd:result:success`, `cmd:result:sent_to_5_devices`)
 
 ### Device Errors
 - **Device Not Found**: Command ignored, logged

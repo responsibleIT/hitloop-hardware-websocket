@@ -4,26 +4,47 @@ This section describes the architecture and extension points of the socket-demo.
 
 ## Sensor data protocol
 
-Each sample is a single line, ASCII hex, 18 hex chars total, then a newline:
+Each sample is a single line, ASCII hex, 20 hex chars total, then a newline:
 
 ```
-id(4) aX(2) aY(2) aZ(2) rssiNW(2) rssiNE(2) rssiSW(2) rssiSE(2)\n
+id(4) aX(2) aY(2) aZ(2) rssiNW(2) rssiNE(2) rssiSW(2) rssiSE(2) color(2) motor(2) reserved(2)\n
 ```
 
 - `id`: 2-byte device ID (last two bytes of MAC), big-endian, printed as 4 hex chars
 - `aX aY aZ`: accelerometer bytes (encoding 0..255; 128 ≈ 0 g)
 - `rssi*`: beacon RSSI bytes (0..255). If unknown, devices may send FF.
+- `color`: Current LED color state (2 hex chars)
+- `motor`: Motor/vibration state (2 hex chars)
+- `reserved`: Reserved for future use (2 hex chars)
 
-Example: `0D4A80A27FFF00010203\n`
+Example: `0D4A80A27FFF00010203FF00AA\n`
 
 ## Command protocol quick reference
 
-- `L\n` list connected device IDs (one per line)
-- `I\n` request IDs from all devices
-- `C<id><RR><GG><BB>\n` set LED color on `<id>`
-- `M<id><SS><TT>\n` vibrate motor on `<id>` with strength `SS` for `TT` ticks
-- `R<id>\n` one-shot sensor sample from `<id>`
-- `R<id><FF>\n` stream samples at `FF` Hz from `<id>`; `00` stops
+The socket-demo uses the WebSocket command protocol:
+
+**Subscribe to data stream**:
+- `s` - Subscribe to receive device sensor data broadcasts
+- Response: `stream:on`
+
+**Send commands to devices**:
+- `cmd:<target>:<command>:<parameters>` - Send command to device(s)
+  - `target`: Device ID (4 hex chars) or `all` for broadcast
+  - `command`: Command name (e.g., `led`, `vibrate`, `pattern`)
+  - `parameters`: Command-specific parameters
+
+**Examples**:
+- `cmd:0D4A:led:ff0000` - Set LED to red on device 0D4A
+- `cmd:all:vibrate:500` - Vibrate all devices for 500ms
+- `cmd:0D4A:pattern:breathing` - Set breathing pattern on device 0D4A
+
+**Available commands** (loaded from CDN command registry):
+- `led:<color>` - Set LED color (hex format like `ff0000`, or named colors)
+- `vibrate:<duration>` - Vibrate for specified milliseconds
+- `pattern:<name>` - Set LED pattern (`breathing`, `heartbeat`, `cycle`, `spring`, `off`)
+- `brightness:<level>` - Set brightness (0-255)
+- `spring_param:<hex>` - Set spring physics parameters (6 hex chars)
+- `status` - Get device status information
 
 - Scenes: `Scene` base class and concrete scenes under `socket-demo/scenes/`
 - Manager: `SceneManager` orchestrates which scene is active
@@ -62,3 +83,25 @@ They are referenced in `index.html` like:
 ```
 
 These CDN files are served by the `cdn-server` service in this repository and kept consistent across demos.
+
+## Deployment
+
+### GitHub Pages Deployment
+
+The socket-demo can be deployed to GitHub Pages using the included GitHub Actions workflow.
+
+**Automatic Deployment**:
+- The workflow (`.github/workflows/deploy-socket-demo.yml`) automatically deploys the `socket-demo` folder to GitHub Pages on pushes to `main` or `master` branches
+- Manual deployment can be triggered via the Actions tab in GitHub
+
+**Setup Steps**:
+1. Ensure the workflow file exists at `.github/workflows/deploy-socket-demo.yml`
+2. Go to repository Settings → Pages
+3. Under "Source", select "GitHub Actions" (not "Deploy from a branch")
+4. Push to `main` or `master` branch, or manually trigger the workflow
+
+**Access**:
+After deployment, the demo will be available at:
+- `https://[username].github.io/[repository-name]/`
+
+**Note**: The demo requires access to the WebSocket server and CDN. Update the URLs in `index.html` if deploying to a different environment, or ensure the production WebSocket server and CDN are accessible from the deployed location.

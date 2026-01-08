@@ -4,16 +4,24 @@ A modular system for real-time interaction with a swarm of physical devices over
 
 ## Command protocol (overview)
 
-All commands and device responses are ASCII-hex, newline-terminated. Multi-byte values are big-endian.
+The system uses a WebSocket-based command protocol with ASCII-hex sensor data frames.
 
-- L\n: List device IDs (server replies with IDs, one per line)
-- I\n: Devices reply with their 2-byte ID (4 hex chars)
-- C<id><RR><GG><BB>\n: Set color on device
-- M<id><SS><TT>\n: Motor strength and duration (1 byte each)
-- R<id>\n: One-shot sensor sample from device
-- R<id><FF>\n: Stream sensors at FF Hz; FF=00 stops streaming
+**Command Format**: `cmd:<target>:<command>:<parameters>`
+- `target`: Device ID (4 hex chars) or `all` for broadcast
+- `command`: Command name (e.g., `led`, `vibrate`, `pattern`)
+- `parameters`: Command-specific parameters
 
-See Sensor Data Protocol for the payload format.
+**Sensor Data Format**: 20-character hex strings containing device ID, IMU data, BLE RSSI, and state information.
+
+**Available Commands** (loaded from CDN command registry):
+- `led:<color>` - Set LED color (hex or named color)
+- `vibrate:<duration>` - Vibrate motor (milliseconds)
+- `pattern:<name>` - Set LED pattern (breathing, heartbeat, cycle, spring, off)
+- `brightness:<level>` - Set LED brightness (0-255)
+- `spring_param:<hex>` - Set spring physics parameters
+- `status` - Get device status
+
+See [Communication Protocol](architecture/communication.md) for detailed protocol documentation.
 
 ## Goals
 
@@ -25,7 +33,7 @@ See Sensor Data Protocol for the payload format.
 ## Components
 
 - `grouploop-firmware`: Firmware for the device hardware. Publishes accelerometer values and beacon RSSI via WebSocket; receives motor/LED commands.
-- `socket-server`: WebSocket backend. Manages device/client connections and message routing.
+- `socket-server`: WebSocket backend using Python `websockets` library. Manages device/client connections, command routing via command registry, and real-time message broadcasting.
 - `socket-client`: Reference web UI to observe device state and send commands.
 - `socket-simulator`: Simulates a swarm of devices (message shape compatible with real devices) for load and UX testing.
 - `device-emulator`: Mobile-friendly emulator for creating virtual devices without hardware.
@@ -66,8 +74,9 @@ flowchart LR
 
 ## Data model and message flow
 
-- Devices (real/sim/emulated) open a WebSocket to the server and stream frames with accelerometer (ax, ay, az) and beacon RSSI (dNW, dNE, dSW, dSE) plus metadata (id, color, motor state).
-- Clients subscribe over WebSocket and render device state. Control commands (e.g., vibrate, LED color) are sent back over the same socket, routed to targets by the server.
+- Devices (real/sim/emulated) open a WebSocket to the server and stream 20-character hex frames containing accelerometer (ax, ay, az), beacon RSSI (dNW, dNE, dSW, dSE), and device state (id, color, motor state).
+- Clients subscribe over WebSocket using the `s` command and receive broadcast sensor data. Control commands use the format `cmd:<target>:<command>:<parameters>` and are routed by the server to target devices.
+- The server loads command definitions from the CDN's `commands.json` file, enabling dynamic command registration.
 - Shared parsing and device abstractions live in CDN-delivered libraries `HitloopDevice.js` and `HitloopDeviceManager.js` used across apps like `socket-client` and `socket-demo`.
 
 ```mermaid

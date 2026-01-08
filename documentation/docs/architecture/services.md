@@ -10,12 +10,15 @@ This document provides detailed information about each service in the GroupLoop 
 
 **Port**: 5003 (external) → 5000 (internal)
 
+**Technology**: Python `websockets` library (asyncio-based WebSocket server)
+
 **Key Features**:
 - Device registration and management
-- Command routing and execution
-- Real-time message broadcasting
-- Command registry integration
-- Health monitoring
+- Command routing and execution via command registry
+- Real-time message broadcasting to subscribers
+- Command registry integration (loads from CDN on startup)
+- Device and client connection tracking
+- Automatic stale connection cleanup
 
 **Configuration**:
 ```yaml
@@ -23,15 +26,20 @@ environment:
   - WS_HOST=0.0.0.0
   - WS_PORT=5000
   - PYTHONUNBUFFERED=1
+  - CDN_BASE_URL=http://cdn.hitloop.feib.nl
 ```
 
 **Dependencies**:
-- Loads command definitions from CDN server
+- Loads command definitions from CDN server (`/static/commands.json`)
 - Manages device and client WebSocket connections
+- Uses `aiohttp` for HTTP requests to CDN
 
-**API Endpoints**:
-- WebSocket connection for devices and clients
-- Health check at `/health`
+**Protocol Support**:
+- WebSocket connections for devices and clients
+- Device registration: `id:<device_id>`
+- Subscription: `s` (clients subscribe to receive broadcasts)
+- Commands: `cmd:<target>:<command>:<parameters>`
+- Health check: `ping` → `pong`
 
 ### CDN Server (`cdn-server`)
 
@@ -46,9 +54,9 @@ environment:
 - JavaScript library hosting
 
 **Endpoints**:
-- `/js/<filename>` - JavaScript libraries
+- `/js/<filename>` - JavaScript libraries (e.g., `p5.min.js`, `HitloopDevice.js`)
 - `/firmware/<filename>` - Firmware files
-- `/static/commands.json` - Command definitions
+- `/static/commands.json` - Command definitions (loaded by WebSocket server on startup)
 
 **Dependencies**:
 - None (standalone service)
@@ -196,10 +204,15 @@ graph TB
 
 Each service provides health endpoints and logging:
 
-- **WebSocket Server**: `/health` endpoint, connection logging
+- **WebSocket Server**: `ping`/`pong` WebSocket messages for health checks, connection logging with labels
 - **CDN Server**: Service status in root response
 - **Client Services**: Built-in connection status monitoring
 - **Documentation**: Static site, no health checks needed
+
+**WebSocket Server Logging**:
+- Connection events: `[CONNECT]`, `[DISCONNECT]`, `[DEVICE_DISCONNECT]`
+- Command execution: `[SEND]`, `[BROADCAST]`, `[COMMANDS]`
+- Errors: `[ERROR]` with detailed messages
 
 ## Scaling Considerations
 

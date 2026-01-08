@@ -127,18 +127,19 @@ services:
 ```python
 # socket-server/app/app.py
 import os
+import asyncio
+import websockets
 
 # Configuration from environment
 WS_HOST = os.environ.get("WS_HOST", "0.0.0.0")
 WS_PORT = int(os.environ.get("WS_PORT", "5000"))
-DEBUG = os.environ.get("DEBUG", "0") == "1"
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "info")
+PYTHONUNBUFFERED = os.environ.get("PYTHONUNBUFFERED", "1")
 
-# CORS configuration
-CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*").split(",")
-
-# CDN configuration
+# CDN configuration for command registry
 CDN_BASE_URL = os.environ.get("CDN_BASE_URL", "http://cdn.hitloop.feib.nl")
+
+# Health checks are done via WebSocket ping/pong messages
+# No HTTP /health endpoint - use WebSocket ping for health checks
 ```
 
 ### Client Configuration
@@ -300,8 +301,11 @@ version: '3.8'
 
 services:
   socket:
+    # Note: WebSocket server uses ping/pong for health checks
+    # Docker healthcheck would need a WebSocket client tool
+    # For now, monitor via logs or use external monitoring
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD-SHELL", "python3 -c 'import websockets; import asyncio; asyncio.run(websockets.connect(\"ws://localhost:5000\"))' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
