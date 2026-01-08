@@ -80,3 +80,15 @@ services:
       - "5006:5000" # MkDocs documentation
     volumes:
       - ./documentation:/site
+
+  socket_demo_site:
+    build:
+      context: ./socket-demo-service
+      dockerfile: Dockerfile
+    ports:
+      - "5010:5000" # Flask socket demo static site
+    volumes:
+      - ./socket-demo-service:/app
+      - ./socket-demo:/socket-demo
+    environment:
+      PYTHONUNBUFFERED: 1
