@@ -1,5 +1,5 @@
 // Create device manager instance
-const deviceManager = new HitloopDeviceManager('ws://feib.nl:5003');
+const deviceManager = new HitloopDeviceManager('wss://ws.grouploop.feib.nl');
 const sceneManager = new SceneManager(deviceManager);
 let fullScreenMode = false;
 let grouploopOutput = null;

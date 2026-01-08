@@ -19,7 +19,7 @@ class HitloopDeviceManager {
      */
     async loadCommandsConfig() {
         try {
-            const response = await fetch('http://cdn.hitloop.feib.nl/static/commands.json');
+            const response = await fetch('https://cdn.hitloop.feib.nl/static/commands.json');
             if (!response.ok) {
                 throw new Error(`Failed to load commands.json: ${response.status}`);
             }
