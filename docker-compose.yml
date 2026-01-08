@@ -1,9 +1,9 @@
 version: '3.8'
 
 x-ws-env: &ws_env
-  WS_DEFAULT_URL: ${WS_DEFAULT_URL:-ws://feib.nl:5003}
+  WS_DEFAULT_URL: ${WS_DEFAULT_URL:-wss://ws.grouploop.feib.nl}
 x-cdn-env: &cdn_env
-  CDN_BASE_URL: ${CDN_BASE_URL:-http://cdn.hitloop.feib.nl}
+  CDN_BASE_URL: ${CDN_BASE_URL:-https://cdn.hitloop.feib.nl}
 
 services:
   socket:
