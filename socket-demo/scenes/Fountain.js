@@ -582,14 +582,11 @@ class Fountain extends Scene {
       circle(state.x, state.y, r * 2);
       const eyeOffsetX = r * 0.35;
       const eyeOffsetY = r * 0.22;
-      const eyeSize = r * 0.16;
+      const eyeSize = r * 0.22;
       fill(0);
       noStroke();
       circle(state.x - eyeOffsetX, state.y - eyeOffsetY, eyeSize);
       circle(state.x + eyeOffsetX, state.y - eyeOffsetY, eyeSize);
-      stroke(0);
-      strokeWeight(3);
-      line(state.x - r * 0.45, state.y + r * 0.28, state.x + r * 0.45, state.y + r * 0.28);
     }
 
     _rgbToHex([r, g, b]) {

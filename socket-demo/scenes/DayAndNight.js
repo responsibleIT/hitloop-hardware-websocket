@@ -15,6 +15,11 @@ class DayAndNight extends Scene {
         this.sunSize = 100;  // Base sun size
         this.sunTime = 0;  // Time counter for animation
         
+        // Audio State
+        this.daylightSound = null;
+        this.nightSound = null;
+        this.active = false;
+        
         // Device state for circles
         this.deviceRadius = 40;
         this._state = new Map();
@@ -50,11 +55,69 @@ class DayAndNight extends Scene {
         this.sunY = height * 0.15;
         this.sunTime = 0;
         this.shouldRedraw = true;
+        
+        // Audio Init
+        this.active = true;
+        if (!this.daylightSound) {
+            loadSound('sounds/daylight-sounds.mp3', (s) => {
+                if (!this.active) {
+                    s.stop();
+                    return;
+                }
+                this.daylightSound = s;
+                this._initAudio(); // Will only start if both are loaded
+            });
+        }
+        
+        if (!this.nightSound) {
+            loadSound('sounds/night-sounds.mp3', (s) => {
+                if (!this.active) {
+                    s.stop();
+                    return;
+                }
+                this.nightSound = s;
+                this._initAudio(); // Will only start if both are loaded
+            });
+        }
+        
+        // If both sounds are already loaded, initialize them now
+        if (this.daylightSound && this.nightSound) {
+            this._initAudio();
+        }
     }
 
     teardown() {
         // Reset color mode to default RGB
         colorMode(RGB, 255);
+        
+        // Stop sounds
+        this.active = false;
+        if (this.daylightSound) {
+            this.daylightSound.stop();
+            this.daylightSound.disconnect();
+        }
+        if (this.nightSound) {
+            this.nightSound.stop();
+            this.nightSound.disconnect();
+        }
+    }
+    
+    _initAudio() {
+        // Only initialize if both sounds are loaded
+        if (!this.daylightSound || !this.nightSound) return;
+        
+        // Disconnect and reconnect for proper initialization (like Fountain.js)
+        this.daylightSound.disconnect();
+        this.daylightSound.connect();
+        this.nightSound.disconnect();
+        this.nightSound.connect();
+        
+        // Start both sounds looping (they'll crossfade via volume)
+        this.daylightSound.setVolume(1);
+        this.daylightSound.loop();
+        
+        this.nightSound.setVolume(0);
+        this.nightSound.loop();
     }
 
     draw() {
@@ -120,6 +183,9 @@ class DayAndNight extends Scene {
         
         // Draw liquid sun (animated, so drawn every frame)
         this._drawLiquidSun();
+        
+        // Switch sounds based on nightness
+        this._updateSounds();
         
         // Always draw participants on top
         colorMode(RGB, 255);
@@ -517,6 +583,31 @@ class DayAndNight extends Scene {
     }
 
     /*------------------------------------*/
+    // Audio methods
+
+    _updateSounds() {
+        if (!this.daylightSound || !this.nightSound) return;
+        if (this.targetNightness === undefined) return;
+        
+        // Ensure both sounds are playing
+        if (!this.daylightSound.isPlaying()) {
+            this.daylightSound.loop();
+        }
+        if (!this.nightSound.isPlaying()) {
+            this.nightSound.loop();
+        }
+        
+        // Crossfade volumes based on nightness
+        // Daylight: louder during day (nightness = 0), quieter at night (nightness = 1)
+        const daylightVolume = 1 - this.targetNightness;
+        // Night: quieter during day (nightness = 0), louder at night (nightness = 1)
+        const nightVolume = this.targetNightness;
+        
+        this.daylightSound.setVolume(daylightVolume);
+        this.nightSound.setVolume(nightVolume);
+    }
+
+    /*------------------------------------*/
     // Participant circles methods
 
     _drawParticipants() {
@@ -638,14 +729,11 @@ class DayAndNight extends Scene {
         circle(state.x, state.y, r * 2);
         const eyeOffsetX = r * 0.35;
         const eyeOffsetY = r * 0.22;
-        const eyeSize = r * 0.16;
+        const eyeSize = r * 0.22;
         fill(0);
         noStroke();
         circle(state.x - eyeOffsetX, state.y - eyeOffsetY, eyeSize);
         circle(state.x + eyeOffsetX, state.y - eyeOffsetY, eyeSize);
-        stroke(0);
-        strokeWeight(3);
-        line(state.x - r * 0.45, state.y + r * 0.28, state.x + r * 0.45, state.y + r * 0.28);
     }
 
     _rgbToHex([r, g, b]) {
