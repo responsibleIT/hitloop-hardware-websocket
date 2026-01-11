@@ -9,6 +9,12 @@ class DayAndNight extends Scene {
         this.shouldRedraw = false;
         this.landscapeBuffer = null;
         
+        // Sun properties (will be initialized in setup() when width/height are available)
+        this.sunX = null;
+        this.sunY = null;
+        this.sunSize = 100;  // Base sun size
+        this.sunTime = 0;  // Time counter for animation
+        
         // Device state for circles
         this.deviceRadius = 40;
         this._state = new Map();
@@ -28,6 +34,9 @@ class DayAndNight extends Scene {
         
         this._state.clear();
         this._lastLedHex.clear();
+        this.sunX = width / 2;
+        this.sunY = height * 0.15;
+        this.sunTime = 0;
         this.shouldRedraw = true;
     }
 
@@ -67,6 +76,9 @@ class DayAndNight extends Scene {
         if (this.landscapeBuffer) {
             image(this.landscapeBuffer, 0, 0);
         }
+        
+        // Draw liquid sun (animated, so drawn every frame)
+        this._drawLiquidSun();
         
         // Always draw participants on top
         colorMode(RGB, 255);
@@ -295,6 +307,89 @@ class DayAndNight extends Scene {
             }
             pop();
         }
+    }
+
+    /*------------------------------------*/
+    // Sun methods
+
+    _drawLiquidSun() {
+        // Initialize sun position if not set (width/height available in draw())
+        if (this.sunX === null || this.sunX === undefined) {
+            this.sunX = width / 2;
+        }
+        if (this.sunY === null || this.sunY === undefined) {
+            this.sunY = height * 0.15;
+        }
+        
+        // Update sun position and animation time
+        this.sunY = height * 0.15;
+        this.sunTime += 0.02;
+        
+        push();
+        colorMode(HSB, 360, 100, 100, 360);
+        
+        // Draw multiple layers for liquid/glowing effect
+        const numLayers = 10;
+        const baseSize = this.sunSize;
+        
+        for (let layer = numLayers; layer >= 0; layer--) {
+            const layerSize = baseSize * (0.4 + layer * 0.06);
+            const alpha = map(layer, 0, numLayers, 80, 250);
+            
+            // Create liquid blob shape using Perlin noise
+            beginShape();
+            noStroke();
+            
+            // Color gradient from white core to yellow/orange edges
+            if (layer === numLayers) {
+                fill(50, 30, 100, alpha * 0.2);  // Outer glow - very light yellow
+            } else if (layer >= numLayers - 2) {
+                fill(50, 40, 100, alpha * 0.4);  // Yellow glow
+            } else if (layer >= numLayers - 4) {
+                fill(45, 50, 100, alpha * 0.6);  // Orange-yellow
+            } else if (layer >= numLayers - 6) {
+                fill(40, 60, 100, alpha * 0.8);  // Orange
+            } else {
+                fill(30, 20, 100, alpha);  // White core
+            }
+            
+            // Create blob shape with Perlin noise distortion
+            const numPoints = 40;
+            for (let i = 0; i <= numPoints; i++) {
+                const angle = (TWO_PI / numPoints) * i;
+                const noiseScale = 0.015;
+                
+                // Use Perlin noise to create liquid-like distortion
+                const noiseX = this.sunX + cos(angle) * layerSize;
+                const noiseY = this.sunY + sin(angle) * layerSize;
+                
+                // Multiple octaves of noise for more organic shape
+                const n1 = noise(
+                    noiseX * noiseScale + this.sunTime * 0.3,
+                    noiseY * noiseScale + this.sunTime * 0.3
+                );
+                const n2 = noise(
+                    noiseX * noiseScale * 2 + this.sunTime * 0.5,
+                    noiseY * noiseScale * 2 + this.sunTime * 0.5
+                );
+                const n3 = noise(
+                    noiseX * noiseScale * 4 + this.sunTime * 0.7,
+                    noiseY * noiseScale * 4 + this.sunTime * 0.7
+                );
+                
+                // Combine noise values for more complex distortion
+                const combinedNoise = (n1 * 0.5 + n2 * 0.3 + n3 * 0.2);
+                const distortion = map(combinedNoise, 0, 1, 0.75, 1.25);
+                
+                const x = this.sunX + cos(angle) * layerSize * distortion;
+                const y = this.sunY + sin(angle) * layerSize * distortion;
+                
+                vertex(x, y);
+            }
+            endShape(CLOSE);
+        }
+        
+        pop();
     }
 
     /*------------------------------------*/
