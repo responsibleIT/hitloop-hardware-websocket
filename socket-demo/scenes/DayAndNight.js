@@ -321,6 +321,37 @@ class DayAndNight extends Scene {
             this.sunY = height * 0.15;
         }
         
+        // Calculate sun horizontal position based on participant actual positions
+        const devices = [...this.deviceManager.getAllDevices().values()];
+        let sumX = 0;
+        let count = 0;
+        
+        for (const dev of devices) {
+            const data = dev.getSensorData?.() ?? {};
+            const id = data.id ?? dev.id ?? dev;
+            const state = this._getState(id);
+            
+            if (state && state.x !== undefined) {
+                sumX += state.x;
+                count++;
+            }
+        }
+        
+        // Calculate target position based on average participant X position
+        let targetX = this.sunX;  // Default to current position (don't reset to center)
+        
+        if (count > 0) {
+            const avgX = sumX / count;
+            targetX = avgX;  // Follow the average participant position
+        }
+        
+        // Constrain sun position to keep minimal distance from edges
+        const edgeMargin = this.sunSize * 0.5;  // Smaller margin to allow closer to edges
+        targetX = constrain(targetX, edgeMargin, width - edgeMargin);
+        
+        // Smoothly interpolate sun position
+        this.sunX += (targetX - this.sunX) * 0.05;
+        
         // Update sun position and animation time
         this.sunY = height * 0.15;
         this.sunTime += 0.02;
