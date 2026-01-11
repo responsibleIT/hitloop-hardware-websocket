@@ -50,6 +50,7 @@ sceneManager.addScene('controlTheBall', new ControlTheBall(deviceManager));
 // sceneManager.addScene('inkColor', new InkColor(deviceManager));
 // sceneManager.addScene('paintRace', new PaintRace(deviceManager));
 sceneManager.addScene('fountain', new Fountain(deviceManager));
+sceneManager.addScene('dayAndNight', new DayAndNight(deviceManager));
 // sceneManager.addScene('ink', new Ink(deviceManager));
 
 let uiFont;
@@ -95,4 +96,8 @@ function keyPressed() {
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
+}
+
+function mousePressed() {
+    sceneManager.mousePressed();
 }
