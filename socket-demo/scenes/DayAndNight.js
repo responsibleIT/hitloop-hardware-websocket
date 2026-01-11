@@ -24,13 +24,25 @@ class DayAndNight extends Scene {
     setup() {
         smooth();
 
-        // define the colors
+        // define the colors (day colors - brighter, more vibrant)
         colorMode(HSB, 360, 100, 100);
-        this.cClouds = color(330, 25, 100);  // light rose for the clouds
-        this.cFade = color(220, 50, 50);     // purplish saturated medium blue for the fade of the sky
-        this.cFurther = color(230, 25, 90);  // purplish unsaturated light blue for the further mountains
-        this.cCloser = color(210, 70, 10);   // greeny saturated dark blue for the closer mountains
-        this.cMist = color(0, 0, 100);       // white for the mist
+        this.cCloudsDay = color(30, 15, 100);    // bright white-yellow clouds
+        this.cFadeDay = color(200, 40, 95);     // bright light blue fade
+        this.cFurtherDay = color(210, 20, 95);   // bright light blue for the further mountains
+        this.cCloserDay = color(200, 50, 30);   // medium blue for the closer mountains
+        this.cMistDay = color(0, 0, 100);        // white for the mist
+        this.bgDay = color(200, 30, 95);         // bright daylight sky background
+        
+        // Night colors - much darker, more dramatic
+        this.cCloudsNight = color(240, 70, 15);   // very dark blue-gray clouds
+        this.cFadeNight = color(250, 90, 5);     // almost black blue fade
+        this.cFurtherNight = color(240, 60, 8);   // very dark blue mountains
+        this.cCloserNight = color(240, 80, 3);    // almost black mountains
+        this.cMistNight = color(240, 50, 20);     // dark blue mist
+        this.bgNight = color(250, 80, 5);         // very dark night sky background
+        
+        // Current nightness factor (0 = day, 1 = night)
+        this.nightness = 0;
         
         this._state.clear();
         this._lastLedHex.clear();
@@ -46,11 +58,27 @@ class DayAndNight extends Scene {
     }
 
     draw() {
-        // Regenerate landscape buffer only when shouldRedraw is true
+        // Calculate nightness based on participant positions
+        // Left side = more night (1.0), Right side = more day (0.0)
+        this._calculateNightness();
+        
+        // Smoothly interpolate nightness to avoid sudden changes
+        if (this.targetNightness === undefined) {
+            this.targetNightness = this.nightness;
+        }
+        this.targetNightness += (this.nightness - this.targetNightness) * 0.05;
+        
+        // Regenerate landscape buffer only when shape needs to change (on click or resize)
         if (this.shouldRedraw || !this.landscapeBuffer || 
             this.landscapeBuffer.width !== width || 
             this.landscapeBuffer.height !== height) {
             this.shouldRedraw = false;
+            
+            // Store random seed for consistent shapes
+            if (!this.landscapeSeed) {
+                this.landscapeSeed = random(1000000);
+            }
+            randomSeed(this.landscapeSeed);
             
             // Create or resize landscape buffer
             if (!this.landscapeBuffer || 
@@ -59,22 +87,35 @@ class DayAndNight extends Scene {
                 this.landscapeBuffer = createGraphics(width, height);
             }
             
-            // Draw landscape to buffer
+            // Draw landscape with day colors (shape stays the same due to fixed seed)
             this.landscapeBuffer.push();
             this.landscapeBuffer.colorMode(HSB, 360, 100, 100);
-            this.landscapeBuffer.background(230, 25, 90);
+            this.landscapeBuffer.background(this.bgDay);
             
-            this._drawFadeToBuffer(this.landscapeBuffer, this.cFade);
-            this._drawCloudsToBuffer(this.landscapeBuffer, this.cClouds);
-            this._drawMountainsToBuffer(this.landscapeBuffer, this.cCloser, this.cFurther, this.cMist);
+            this._drawFadeToBuffer(this.landscapeBuffer, this.cFadeDay);
+            this._drawCloudsToBuffer(this.landscapeBuffer, this.cCloudsDay);
+            this._drawMountainsToBuffer(this.landscapeBuffer, this.cCloserDay, this.cFurtherDay, this.cMistDay);
             this.landscapeBuffer.pop();
         }
         
-        // Always redraw background and landscape to erase previous circle positions
+        // Always redraw background with interpolated color (more dramatic transition)
         colorMode(HSB, 360, 100, 100);
-        background(230, 25, 90);
+        const bg = lerpColor(this.bgDay, this.bgNight, this.targetNightness);
+        background(bg);
+        
+        // Draw landscape buffer
         if (this.landscapeBuffer) {
             image(this.landscapeBuffer, 0, 0);
+            
+            // Apply smooth darkening overlay for night effect (more dramatic)
+            push();
+            colorMode(HSB, 360, 100, 100, 360);
+            blendMode(MULTIPLY);
+            const darkenAlpha = this.targetNightness * 200;
+            fill(250, 80, 100, darkenAlpha);
+            rect(0, 0, width, height);
+            blendMode(BLEND);
+            pop();
         }
         
         // Draw liquid sun (animated, so drawn every frame)
@@ -83,6 +124,35 @@ class DayAndNight extends Scene {
         // Always draw participants on top
         colorMode(RGB, 255);
         this._drawParticipants();
+    }
+    
+    _calculateNightness() {
+        // Calculate average X position of participants
+        const devices = [...this.deviceManager.getAllDevices().values()];
+        let sumX = 0;
+        let count = 0;
+        
+        for (const dev of devices) {
+            const data = dev.getSensorData?.() ?? {};
+            const id = data.id ?? dev.id ?? dev;
+            const state = this._getState(id);
+            
+            if (state && state.x !== undefined) {
+                sumX += state.x;
+                count++;
+            }
+        }
+        
+        if (count > 0) {
+            const avgX = sumX / count;
+            // Map average X to nightness: left (0) = 1.0 (night), right (width) = 0.0 (day)
+            const normalizedX = avgX / width;
+            this.nightness = constrain(1 - normalizedX, 0, 1);
+        } else {
+            // No participants, maintain current nightness (don't reset)
+            // Or slowly fade to day
+            this.nightness = constrain(this.nightness * 0.99, 0, 1);
+        }
     }
 
     mousePressed() {
@@ -371,18 +441,41 @@ class DayAndNight extends Scene {
             beginShape();
             noStroke();
             
-            // Color gradient from white core to yellow/orange edges
+            // Color gradient: Sun (yellow) during day, Moon (white) during night
+            // Smooth fade transition between them
+            const nightness = this.targetNightness || 0;
+            
+            // Sun colors (yellow)
+            let sunColor;
             if (layer === numLayers) {
-                fill(50, 30, 100, alpha * 0.2);  // Outer glow - very light yellow
+                sunColor = color(50, 30, 100, alpha * 0.2);  // Outer glow - very light yellow
             } else if (layer >= numLayers - 2) {
-                fill(50, 40, 100, alpha * 0.4);  // Yellow glow
+                sunColor = color(50, 40, 100, alpha * 0.4);  // Yellow glow
             } else if (layer >= numLayers - 4) {
-                fill(45, 50, 100, alpha * 0.6);  // Orange-yellow
+                sunColor = color(50, 50, 100, alpha * 0.6);  // Bright yellow
             } else if (layer >= numLayers - 6) {
-                fill(40, 60, 100, alpha * 0.8);  // Orange
+                sunColor = color(50, 60, 100, alpha * 0.8);  // Rich yellow
             } else {
-                fill(30, 20, 100, alpha);  // White core
+                sunColor = color(50, 70, 100, alpha);         // Bright yellow core (sun)
             }
+            
+            // Moon colors (white)
+            let moonColor;
+            if (layer === numLayers) {
+                moonColor = color(0, 0, 70, alpha * 0.2);   // Outer glow - light white
+            } else if (layer >= numLayers - 2) {
+                moonColor = color(0, 0, 80, alpha * 0.4);   // Light white
+            } else if (layer >= numLayers - 4) {
+                moonColor = color(0, 0, 90, alpha * 0.6);    // Bright white
+            } else if (layer >= numLayers - 6) {
+                moonColor = color(0, 0, 95, alpha * 0.8);    // Very bright white
+            } else {
+                moonColor = color(0, 0, 100, alpha);          // Pure white core (moon)
+            }
+            
+            // Smooth fade transition from yellow sun to white moon
+            const currentColor = lerpColor(sunColor, moonColor, nightness);
+            fill(currentColor);
             
             // Create blob shape with Perlin noise distortion
             const numPoints = 40;
