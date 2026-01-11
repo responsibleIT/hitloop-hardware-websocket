@@ -627,14 +627,24 @@ class DayAndNight extends Scene {
 
         this._separateOverlaps(renderList.map((r) => r.state));
 
-        // White color for all participants
-        const whiteColor = [255, 255, 255];
+        // Calculate participant color based on day/night
+        // Yellow during day (targetNightness = 0), white at night (targetNightness = 1)
+        const yellowColor = [255, 220, 0];  // Warm yellow
+        const whiteColor = [255, 255, 255];  // White
+        const nightness = this.targetNightness || 0;
+        
+        // Interpolate between yellow and white
+        const participantColor = [
+            lerp(yellowColor[0], whiteColor[0], nightness),
+            lerp(yellowColor[1], whiteColor[1], nightness),
+            lerp(yellowColor[2], whiteColor[2], nightness)
+        ];
 
         for (const { state, id } of renderList) {
-            this._drawFace(state, whiteColor);
+            this._drawFace(state, participantColor);
             
-            // Update device LED color to white
-            const hex = this._rgbToHex(whiteColor);
+            // Update device LED color to match participant color
+            const hex = this._rgbToHex(participantColor);
             const last = this._lastLedHex.get(id);
             if (hex !== last) {
                 try {
