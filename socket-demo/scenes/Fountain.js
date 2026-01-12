@@ -205,9 +205,19 @@ class Fountain extends Scene {
         else if (allBlue) waterTextureMode = 'blue';
       }
       
-      // Keep water pressure constant regardless of side movement
-      const particleMultiplier = 1.0;
+      // Adjust water intensity based on participant positions
+      // Left side = less water, Right side = more water
+      const totalParticipants = participantsOnLeft + participantsOnRight;
+      let particleMultiplier = 1.0;
       const speedMultiplier = 1.0;
+      
+      if (totalParticipants > 0) {
+        const rightRatio = participantsOnRight / totalParticipants;
+        // Map from 0 (all left) to 1 (all right)
+        // All left: 0.5x water (less splash)
+        // All right: 1.5x water (more splash)
+        particleMultiplier = map(rightRatio, 0, 1, 0.5, 1.5);
+      }
       
       for(let T = 1; T <= 10; T++) {
           // Determine band for this fountain (Mirrored Stage Layout - 5 bands)
