@@ -254,23 +254,8 @@ class Fountain extends Scene {
           const melodyEnergy = (mid + highMid) / 2;
           const melodyIntensity = map(melodyEnergy, 0, 255, 0, 1);
 
-          // Rhythmic Sway Calculation
-          // Slower speed for more graceful left-right movement
-          let baseSpeed = 0.03 + (bass * 0.0002); // Reduced base speed
-          let melodySpeedBoost = melodyIntensity * 0.01; // Reduced melody speed boost
-          let swaySpeed = baseSpeed + melodySpeedBoost;
-          
-          // Amplitude based on local energy band, enhanced by melody presence
-          let baseAmp = map(localEnergy, 0, 255, 0.2, 1.5);
-          let melodyAmpBoost = melodyIntensity * 1.2; // Significant boost when melodies are present
-          let swayAmp = baseAmp + melodyAmpBoost;
-          
-          // Sync instruments: Calculate band index (0-4) for mirrored fountains
-          let bandIndex = (T <= 5) ? (T - 1) : (10 - T);
-
-          // Calculate sway angle: Sine wave + phase shift per BAND
-          // More pronounced dancing when melodies are present
-          let sway = Math.sin(this.t * swaySpeed + bandIndex * 0.8) * swayAmp;
+          // No sway - fountains go straight up
+          let sway = 0;
 
           for(let i = 0; i < count; i++) {
               let idx = this.t_counter % 5000;
@@ -284,8 +269,8 @@ class Fountain extends Scene {
               let S = t_val / 2000.0;
               let term1 = N(S, T) * 5;
               let term2 = random(1);
-              // Apply sway to direction
-              let R = 1.7 + term1 + term2 + sway;
+              // No sway applied - straight up direction
+              let R = 1.7 + term1 + term2;
               
               let noiseCheck = 9; 
               // Increased base velocity multiplier (was 0.8)
@@ -337,7 +322,7 @@ class Fountain extends Scene {
           }
           
           // Increase brightness for better contrast
-          const brightnessBoost = 1.3;
+          const brightnessBoost = 1.7;
           let brightC = [
             Math.min(255, c[0] * brightnessBoost),
             Math.min(255, c[1] * brightnessBoost),
