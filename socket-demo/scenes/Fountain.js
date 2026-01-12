@@ -205,22 +205,9 @@ class Fountain extends Scene {
         else if (allBlue) waterTextureMode = 'blue';
       }
       
-      // Calculate multipliers based on participant distribution
-      // More on left = more water and faster
-      // More on right = less water and slower
-      const totalParticipants = participantsOnLeft + participantsOnRight;
-      let particleMultiplier = 1.0;
-      let speedMultiplier = 1.0;
-      
-      if (totalParticipants > 0) {
-        const leftRatio = participantsOnLeft / totalParticipants;
-        const rightRatio = participantsOnRight / totalParticipants;
-        
-        // Left participants increase water (max 2x) and speed (max 1.5x)
-        // Right participants decrease water (min 0.5x) and speed (min 0.7x)
-        particleMultiplier = map(leftRatio, 0, 1, 0.5, 2.0);
-        speedMultiplier = map(leftRatio, 0, 1, 0.7, 1.5);
-      }
+      // Keep water pressure constant regardless of side movement
+      const particleMultiplier = 1.0;
+      const speedMultiplier = 1.0;
       
       for(let T = 1; T <= 10; T++) {
           // Determine band for this fountain (Mirrored Stage Layout - 5 bands)
@@ -335,18 +322,37 @@ class Fountain extends Scene {
           let sx = e.x * scaleX;
           let sy = e.y * scaleY;
           
-          // Set stroke color per particle
+          // Set stroke color per particle with brightness boost for better contrast
           let c = e.c || [255, 255, 255];
+          
+          // Lighten red and blue water colors specifically (keep controller colors unchanged)
+          // For red: make it lighter pink-red
+          // For blue: make it lighter sky-blue (keep blue dominant, not purple)
+          if (c[0] > 200 && c[1] < 50 && c[2] < 50) {
+            // Red color - lighten it
+            c = [255, Math.min(255, c[1] + 100), Math.min(255, c[2] + 100)];
+          } else if (c[2] > 200 && c[0] < 50 && c[1] < 50) {
+            // Blue color - lighten it (add equal amounts of red/green to keep it blue, not purple)
+            c = [Math.min(255, c[0] + 80), Math.min(255, c[1] + 80), 255];
+          }
+          
+          // Increase brightness for better contrast
+          const brightnessBoost = 1.3;
+          let brightC = [
+            Math.min(255, c[0] * brightnessBoost),
+            Math.min(255, c[1] * brightnessBoost),
+            Math.min(255, c[2] * brightnessBoost)
+          ];
           
           if (waterTextureMode === 'blue') {
               // Blue texture: thicker strokes with glow effect
               this.fountainLayer.strokeWeight(2);
-              this.fountainLayer.stroke(c[0], c[1], c[2], 200);
+              this.fountainLayer.stroke(brightC[0], brightC[1], brightC[2], 200);
               this.fountainLayer.point(sx, sy);
               
               // Add glow effect with surrounding points
               this.fountainLayer.strokeWeight(1);
-              this.fountainLayer.stroke(c[0], c[1], c[2], 100);
+              this.fountainLayer.stroke(brightC[0], brightC[1], brightC[2], 100);
               this.fountainLayer.point(sx + 1, sy);
               this.fountainLayer.point(sx - 1, sy);
               this.fountainLayer.point(sx, sy + 1);
@@ -354,12 +360,12 @@ class Fountain extends Scene {
           } else if (waterTextureMode === 'red') {
               // Red texture: fiery/sparkly effect with multiple bright points
               this.fountainLayer.strokeWeight(2);
-              this.fountainLayer.stroke(c[0], c[1], c[2], 255);
+              this.fountainLayer.stroke(brightC[0], brightC[1], brightC[2], 255);
               this.fountainLayer.point(sx, sy);
               
               // Add sparkle effect
               this.fountainLayer.strokeWeight(1);
-              this.fountainLayer.stroke(c[0], Math.min(255, c[1] + 50), Math.min(255, c[2] + 30), 150);
+              this.fountainLayer.stroke(brightC[0], Math.min(255, brightC[1] + 50), Math.min(255, brightC[2] + 30), 150);
               this.fountainLayer.point(sx + 0.5, sy - 0.5);
               this.fountainLayer.point(sx - 0.5, sy + 0.5);
               this.fountainLayer.point(sx + 0.7, sy + 0.3);
@@ -367,19 +373,19 @@ class Fountain extends Scene {
           } else if (waterTextureMode === 'white') {
               // White texture: bright, glowing effect
               this.fountainLayer.strokeWeight(3);
-              this.fountainLayer.stroke(c[0], c[1], c[2], 255);
+              this.fountainLayer.stroke(brightC[0], brightC[1], brightC[2], 255);
               this.fountainLayer.point(sx, sy);
               
               // Bright glow halo
               this.fountainLayer.strokeWeight(2);
-              this.fountainLayer.stroke(c[0], c[1], c[2], 180);
+              this.fountainLayer.stroke(brightC[0], brightC[1], brightC[2], 180);
               this.fountainLayer.point(sx + 1, sy);
               this.fountainLayer.point(sx - 1, sy);
               this.fountainLayer.point(sx, sy + 1);
               this.fountainLayer.point(sx, sy - 1);
               
               this.fountainLayer.strokeWeight(1);
-              this.fountainLayer.stroke(c[0], c[1], c[2], 120);
+              this.fountainLayer.stroke(brightC[0], brightC[1], brightC[2], 120);
               this.fountainLayer.point(sx + 1.5, sy);
               this.fountainLayer.point(sx - 1.5, sy);
               this.fountainLayer.point(sx, sy + 1.5);
@@ -387,12 +393,12 @@ class Fountain extends Scene {
           } else if (waterTextureMode === 'green') {
               // Green texture: organic, flowing effect with soft trails
               this.fountainLayer.strokeWeight(2);
-              this.fountainLayer.stroke(c[0], c[1], c[2], 180);
+              this.fountainLayer.stroke(brightC[0], brightC[1], brightC[2], 180);
               this.fountainLayer.point(sx, sy);
               
               // Soft flowing effect
               this.fountainLayer.strokeWeight(1.5);
-              this.fountainLayer.stroke(c[0], c[1], c[2], 120);
+              this.fountainLayer.stroke(brightC[0], brightC[1], brightC[2], 120);
               this.fountainLayer.point(sx + 0.8, sy + 0.5);
               this.fountainLayer.point(sx - 0.8, sy + 0.5);
               this.fountainLayer.point(sx + 0.5, sy + 0.8);
@@ -400,7 +406,7 @@ class Fountain extends Scene {
           } else {
               // Normal texture: thin single point
               this.fountainLayer.strokeWeight(1);
-              this.fountainLayer.stroke(c[0], c[1], c[2]);
+              this.fountainLayer.stroke(brightC[0], brightC[1], brightC[2]);
               this.fountainLayer.point(sx, sy);
           }
       }
