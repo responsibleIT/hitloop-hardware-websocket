@@ -70,7 +70,7 @@ function setup() {
     // Connect to WebSocket server
     deviceManager.connect();
     // Default state
-    sceneManager.switchTo('fountain');
+    sceneManager.switchTo('controlTheBall');
 }
 
 function draw() {

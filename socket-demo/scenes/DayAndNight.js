@@ -189,10 +189,7 @@ class DayAndNight extends Scene {
         
         // Always draw participants on top
         colorMode(RGB, 255);
-        const renderList = this._drawParticipants();
-        
-        // Draw preview overlay
-        this._drawPreviewOverlay(renderList);
+        this._drawParticipants();
     }
     
     _calculateNightness() {
@@ -643,11 +640,6 @@ class DayAndNight extends Scene {
             lerp(yellowColor[2], whiteColor[2], nightness)
         ];
 
-        // Add color to renderList for preview overlay
-        for (const item of renderList) {
-            item.col = participantColor;
-        }
-
         for (const { state, id } of renderList) {
             this._drawFace(state, participantColor);
             
@@ -669,8 +661,6 @@ class DayAndNight extends Scene {
         for (const key of [...this._lastLedHex.keys()]) {
             if (!present.has(key)) this._lastLedHex.delete(key);
         }
-        
-        return renderList;
     }
 
     _getState(id) {
@@ -763,89 +753,4 @@ class DayAndNight extends Scene {
             .join('');
     }
 
-    _drawPreviewOverlay(renderList) {
-        // Preview overlay dimensions and position
-        const previewWidth = 350;
-        const previewHeight = 260;
-        const previewX = width - previewWidth - 20;
-        const previewY = height - previewHeight - 20;
-        const padding = 10;
-        
-        // Draw background with light gray background (semi-transparent)
-        push();
-        fill(220, 220, 220, 200); // Light gray with transparency
-        stroke(0, 0, 0, 200);
-        strokeWeight(2);
-        rect(previewX, previewY, previewWidth, previewHeight, 5);
-        
-        // Preview space (excluding padding)
-        const previewSpaceX = previewX + padding;
-        const previewSpaceY = previewY + padding;
-        const previewSpaceW = previewWidth - padding * 2;
-        const previewSpaceH = previewHeight - padding * 2;
-        
-        // Draw beacons d1 (blue, bottom-left) and d2 (red, bottom-right)
-        const beaconBaseWidth = 12;
-        const beaconBaseHeight = 6;
-        const beaconDomeHeight = 8;
-        const beaconY = previewSpaceY + previewSpaceH - beaconBaseHeight - 5;
-        
-        // Beacon d1 (blue) - bottom-left
-        const d1X = previewSpaceX + beaconBaseWidth + 5;
-        push();
-        // Base (dark gray)
-        fill(60, 60, 60);
-        stroke(80, 80, 80);
-        strokeWeight(1);
-        rect(d1X - beaconBaseWidth/2, beaconY, beaconBaseWidth, beaconBaseHeight, 1);
-        // Dome (dark blue)
-        fill(0, 0, 180);
-        stroke(0, 0, 220);
-        strokeWeight(1);
-        arc(d1X, beaconY, beaconBaseWidth, beaconDomeHeight, PI, 0);
-        // Light insert (lighter blue)
-        fill(100, 150, 255);
-        noStroke();
-        rect(d1X - 2, beaconY - beaconDomeHeight/2 + 1, 4, beaconDomeHeight - 2);
-        pop();
-        
-        // Beacon d2 (red) - bottom-right
-        const d2X = previewSpaceX + previewSpaceW - beaconBaseWidth - 5;
-        push();
-        // Base (dark gray)
-        fill(60, 60, 60);
-        stroke(80, 80, 80);
-        strokeWeight(1);
-        rect(d2X - beaconBaseWidth/2, beaconY, beaconBaseWidth, beaconBaseHeight, 1);
-        // Dome (dark red)
-        fill(180, 0, 0);
-        stroke(220, 0, 0);
-        strokeWeight(1);
-        arc(d2X, beaconY, beaconBaseWidth, beaconDomeHeight, PI, 0);
-        // Light insert (lighter red)
-        fill(255, 150, 100);
-        noStroke();
-        rect(d2X - 2, beaconY - beaconDomeHeight/2 + 1, 4, beaconDomeHeight - 2);
-        pop();
-        
-        // Map participant positions from main screen to preview space
-        // Scale from main screen coordinates to preview coordinates
-        const scaleX = previewSpaceW / width;
-        const scaleY = previewSpaceH / height;
-        const participantRadius = 4;
-        
-        // Draw participant circles
-        for (const { state, col } of renderList) {
-            // Map main screen position to preview position
-            const previewX_pos = previewSpaceX + state.x * scaleX;
-            const previewY_pos = previewSpaceY + state.y * scaleY;
-            
-            // Draw circle with participant color (no stroke)
-            fill(col[0], col[1], col[2]);
-            noStroke();
-            circle(previewX_pos, previewY_pos, participantRadius * 2);
-        }
-        
-        pop();
-    }
 }
