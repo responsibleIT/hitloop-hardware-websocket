@@ -16,6 +16,11 @@
       .card h2 { margin: 0; font-size: 16px; color: #111827; }
       .card a { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; border-radius: 8px; text-decoration: none; color: white; background: #2563eb; border: 1px solid #1d4ed8; font-weight: 600; }
       .card a:hover { background: #1d4ed8; }
+      details.readme { margin-top: 8px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+      details.readme summary { cursor: pointer; padding: 8px 10px; font-weight: 600; color: #0f172a; outline: none; list-style: none; }
+      details.readme summary::-webkit-details-marker { display: none; }
+      details.readme .readme-body { padding: 0 12px 12px 12px; color: #1f2937; }
+      details.readme pre { background: #0f172a; color: #e2e8f0; padding: 8px; border-radius: 6px; overflow-x: auto; }
       .empty { padding: 16px; border: 1px dashed #cbd5e1; border-radius: 10px; background: #fff; color: #475569; max-width: 640px; }
       code { background: #e2e8f0; padding: 2px 6px; border-radius: 6px; font-size: 13px; }
     </style>
@@ -33,6 +38,15 @@
           <h2>{{ app_name }}</h2>
           <p>Served from <code>/apps/{{ app_name }}/</code></p>
           <a href="/apps/{{ app_name }}/">Open</a>
+          {% set readme = readmes.get(app_name) if readmes else None %}
+          {% if readme %}
+          <details class="readme">
+            <summary>README</summary>
+            <div class="readme-body">
+              {{ readme|safe }}
+            </div>
+          </details>
+          {% endif %}
         </div>
         {% endfor %}
       </div>

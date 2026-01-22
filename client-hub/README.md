@@ -7,6 +7,7 @@ Single Flask application that serves all client UIs under `/apps/<name>/` from `
 - `app/static/vendor/js`: shared libs (p5, HitloopDevice*, p5.sound).
 - `app/static/apps/<name>`: each client’s self-contained HTML/CSS/JS.
 - `app/templates/landing.html`: landing page listing detected apps.
+- Optional `app/static/apps/<name>/README.md` is rendered on the landing card.
 
 ## Running locally
 ```bash

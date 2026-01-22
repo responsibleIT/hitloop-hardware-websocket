@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 from flask import Flask, abort, jsonify, redirect, render_template, Response, send_from_directory, url_for
+import markdown as md
 
 
 BASE_DIR = Path(__file__).parent
@@ -26,6 +27,20 @@ def _list_apps():
     )
 
 
+def _read_readme_html(app_name: str):
+    readme_path = (STATIC_APPS_DIR / app_name / "README.md").resolve()
+    if not readme_path.is_file() or not _is_within(readme_path, STATIC_APPS_DIR):
+        return None
+    try:
+        text = readme_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        return md.markdown(text, extensions=["extra", "sane_lists", "toc"])
+    except Exception:
+        return None
+
+
 def create_app() -> Flask:
     app = Flask(__name__, static_folder="static", template_folder="templates")
 
@@ -35,7 +50,8 @@ def create_app() -> Flask:
         default_app = os.environ.get("DEFAULT_APP")
         if default_app and default_app in apps:
             return redirect(url_for("serve_app_index", app_name=default_app))
-        return render_template("landing.html", apps=apps)
+        readmes = {name: _read_readme_html(name) for name in apps}
+        return render_template("landing.html", apps=apps, readmes=readmes)
 
     @app.route("/health")
     def health():
