@@ -18,77 +18,14 @@ services:
       - WS_HOST=0.0.0.0
       - WS_PORT=5000
       - PYTHONUNBUFFERED=1      
-  client:
+  client_hub:
     build:
-      context: ./socket-client
+      context: ./client-hub
       dockerfile: Dockerfile
     ports:
-      - "5004:5000" # Flask client UI
+      - "5004:5000" # Unified Flask client hub
     volumes:
-      - ./socket-client:/app
+      - ./client-hub:/app
     environment:
       <<: [*ws_env, *cdn_env]
-  cdn_server:
-    build:
-      context: ./cdn-server
-      dockerfile: Dockerfile
-    ports:
-      - "5008:5000" # Flask CDN for static/firmware
-    volumes:
-      - ./cdn-server:/app
-      - ./cdn-client/app/static/js:/app/static/js
-      - ./cdn-client/app/static/firmware:/app/static/firmware
-    environment:
-      PYTHONUNBUFFERED: 1
-      <<: *cdn_env
-  device_control:
-    build:
-      context: ./device-control
-      dockerfile: Dockerfile
-    ports:
-      - "5009:5000" # Flask device control UI
-    volumes:
-      - ./device-control:/app
-    environment:
-      <<: [*ws_env, *cdn_env]
-      PYTHONUNBUFFERED: 1
-  simulator:
-    build:
-      context: ./socket-simulator
-      dockerfile: Dockerfile
-    ports:
-      - "5005:5000" # Flask simulator UI
-    volumes:
-      - ./socket-simulator:/app
-    environment:
-      <<: [*ws_env, *cdn_env]
-  device_emulator:
-    build:
-      context: ./device-emulator
-      dockerfile: Dockerfile
-    ports:
-      - "5007:5000" # Flask device emulator (mobile)
-    volumes:
-      - ./device-emulator:/app
-    environment:
-      <<: [*ws_env, *cdn_env]
-  docs:
-    build:
-      context: ./documentation
-      dockerfile: Dockerfile
-    ports:
-      - "5006:5000" # MkDocs documentation
-    volumes:
-      - ./documentation:/site
-
-  socket_demo_site:
-    build:
-      context: ./socket-demo-service
-      dockerfile: Dockerfile
-    ports:
-      - "5010:5000" # Flask socket demo static site
-    volumes:
-      - ./socket-demo-service:/app
-      - ./socket-demo:/socket-demo
-    environment:
-      PYTHONUNBUFFERED: 1
+      DEFAULT_APP: ${DEFAULT_APP:-}

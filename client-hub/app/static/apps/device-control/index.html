@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GroupLoop Device Control</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            background-color: #f5f5f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background-color: white;
+        }
+        
+        .control-panel {
+            width: 350px;
+            background-color: white;
+            border-left: 1px solid #e5e7eb;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .toolbar {
+            padding: 12px 16px;
+            background-color: white;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .toolbar input {
+            padding: 6px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .toolbar button {
+            padding: 6px 12px;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .toolbar button:hover {
+            background-color: #2563eb;
+        }
+        
+        .toolbar button:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            font-size: 12px;
+            color: #6b7280;
+            margin-left: auto;
+        }
+        
+        .control-section {
+            margin-bottom: 24px;
+            padding: 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background-color: #f9fafb;
+        }
+        
+        .control-section h3 {
+            margin-bottom: 12px;
+            color: #374151;
+            font-size: 16px;
+        }
+        
+        .form-group {
+            margin-bottom: 12px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 14px;
+            color: #374151;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .form-group input[type="color"] {
+            height: 40px;
+            padding: 4px;
+        }
+        
+        .apply-btn {
+            width: 100%;
+            padding: 10px;
+            background-color: #10b981;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .apply-btn:hover {
+            background-color: #059669;
+        }
+        
+        .apply-btn:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+        }
+        
+        .selected-info {
+            background-color: #dbeafe;
+            border: 1px solid #3b82f6;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .selected-info h4 {
+            color: #1e40af;
+            margin-bottom: 8px;
+        }
+        
+        .device-list {
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        
+        .device-item {
+            padding: 4px 8px;
+            background-color: #eff6ff;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            font-size: 12px;
+            color: #1e40af;
+        }
+        
+        .selection-box {
+            position: absolute;
+            border: 2px dashed #3b82f6;
+            background-color: rgba(59, 130, 246, 0.1);
+            pointer-events: none;
+        }
+    </style>
+    <script src="/static/vendor/js/p5.min.js"></script>
+    <script src="/static/vendor/js/HitloopDevice.js"></script>
+    <script src="/static/vendor/js/HitloopDeviceManager.js"></script>
+    <script src="/config.js"></script>
+    <script>
+        const defaultWsUrl = (window.APP_CONFIG && window.APP_CONFIG.wsDefaultUrl) || "ws://localhost:5003/";
+        document.addEventListener("DOMContentLoaded", () => {
+            const input = document.getElementById("wsUrl");
+            if (input && !input.value) {
+                input.value = defaultWsUrl;
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="toolbar">
+        <label for="wsUrl">WebSocket URL:</label>
+        <input type="text" id="wsUrl" size="40">
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+        <span class="status" id="status">disconnected</span>
+    </div>
+    
+    <div class="container">
+        <div class="canvas-container" id="canvas-container">
+            <!-- Canvas will be created here by p5.js -->
+        </div>
+        
+        <div class="control-panel">
+            <div class="selected-info" id="selectedInfo" style="display: none;">
+                <h4>Selected Devices</h4>
+                <div class="device-list" id="deviceList"></div>
+            </div>
+            
+            <div class="control-section">
+                <h3>LED Color</h3>
+                <div class="form-group">
+                    <label for="ledColor">Color:</label>
+                    <input type="color" id="ledColor" value="#ff0000">
+                </div>
+                <button class="apply-btn" id="applyLedColor" disabled>Apply LED Color</button>
+            </div>
+            
+            <div class="control-section">
+                <h3>LED Pattern</h3>
+                <div class="form-group">
+                    <label for="ledPattern">Pattern:</label>
+                    <select id="ledPattern">
+                        <option value="breathing">Breathing</option>
+                        <option value="heartbeat">Heartbeat</option>
+                        <option value="cycle">Cycle</option>
+                        <option value="spring">Spring</option>
+                        <option value="solid">Solid</option>
+                        <option value="off">Off</option>
+                    </select>
+                </div>
+                <button class="apply-btn" id="applyLedPattern" disabled>Apply LED Pattern</button>
+            </div>
+            
+            <div class="control-section">
+                <h3>Spring Parameters</h3>
+                <div class="form-group">
+                    <label for="springConstant">Spring Constant (0-255):</label>
+                    <input type="range" id="springConstant" min="0" max="255" value="16">
+                    <span id="springConstantValue">16</span>
+                </div>
+                <div class="form-group">
+                    <label for="springDamping">Damping (0-255):</label>
+                    <input type="range" id="springDamping" min="0" max="255" value="5">
+                    <span id="springDampingValue">5</span>
+                </div>
+                <div class="form-group">
+                    <label for="springMass">Mass (0-255):</label>
+                    <input type="range" id="springMass" min="0" max="255" value="10">
+                    <span id="springMassValue">10</span>
+                </div>
+                <button class="apply-btn" id="applySpringParams" disabled>Apply Spring Parameters</button>
+            </div>
+            
+            <div class="control-section">
+                <h3>LED Brightness</h3>
+                <div class="form-group">
+                    <label for="ledBrightness">Brightness (0-255):</label>
+                    <input type="range" id="ledBrightness" min="0" max="255" value="128">
+                    <span id="ledBrightnessValue">128</span>
+                </div>
+                <button class="apply-btn" id="applyLedBrightness" disabled>Apply Brightness</button>
+            </div>
+            
+            <div class="control-section">
+                <h3>Vibration</h3>
+                <div class="form-group">
+                    <label for="vibrationDuration">Duration (ms):</label>
+                    <input type="number" id="vibrationDuration" min="0" max="5000" value="500">
+                </div>
+                <button class="apply-btn" id="applyVibration" disabled>Apply Vibration</button>
+            </div>
+            
+            <div class="control-section">
+                <h3>Reset</h3>
+                <button class="apply-btn" id="applyReset" disabled>Reset Selected Devices</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="./client.js"></script>
+</body>
+</html>

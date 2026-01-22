@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Client Hub</title>
+    <style>
+      :root { color-scheme: light; }
+      body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #f7f7f8; color: #0f172a; }
+      header { padding: 24px; border-bottom: 1px solid #e2e8f0; background: white; }
+      h1 { margin: 0 0 6px 0; font-size: 22px; }
+      p { margin: 4px 0; color: #475569; }
+      main { padding: 24px; }
+      .apps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+      .card { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); display: flex; flex-direction: column; gap: 8px; }
+      .card h2 { margin: 0; font-size: 16px; color: #111827; }
+      .card a { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; border-radius: 8px; text-decoration: none; color: white; background: #2563eb; border: 1px solid #1d4ed8; font-weight: 600; }
+      .card a:hover { background: #1d4ed8; }
+      .empty { padding: 16px; border: 1px dashed #cbd5e1; border-radius: 10px; background: #fff; color: #475569; max-width: 640px; }
+      code { background: #e2e8f0; padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Client Applications</h1>
+      <p>Pick an app to open. Drop a new folder into <code>static/apps</code> and restart to add more.</p>
+    </header>
+    <main>
+      {% if apps %}
+      <div class="apps">
+        {% for app_name in apps %}
+        <div class="card">
+          <h2>{{ app_name }}</h2>
+          <p>Served from <code>/apps/{{ app_name }}/</code></p>
+          <a href="/apps/{{ app_name }}/">Open</a>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty">
+        No client apps detected. Add a folder with an <code>index.html</code> to <code>static/apps</code>.
+      </div>
+      {% endif %}
+    </main>
+  </body>
+</html>

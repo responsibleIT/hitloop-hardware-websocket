@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Socket Simulator</title>
+	<link rel="stylesheet" href="./styles.css">
+	<script src="/static/vendor/js/p5.min.js"></script>
+	<script src="/config.js"></script>
+	<script>
+		window.DEFAULT_WS_URL = (window.APP_CONFIG && window.APP_CONFIG.wsDefaultUrl) || "ws://localhost:5003/";
+		document.addEventListener("DOMContentLoaded", () => {
+			const wsText = document.getElementById("wsUrl");
+			if (wsText) {
+				wsText.textContent = window.DEFAULT_WS_URL;
+			}
+		});
+	</script>
+	<script src="./cfg.js"></script>
+	<script src="./device.js"></script>
+	<script src="./ui.js"></script>
+</head>
+<body>
+	<div class="layout">
+		<div class="panel">
+			<h1>Simulator</h1>
+			<div class="control">
+				<label for="deviceCount">Devices: <span id="deviceCountValue">10</span></label>
+				<input id="deviceCount" type="range" min="1" max="50" value="10" step="1">
+			</div>
+			<div class="control">
+				<label for="rate">Send rate (Hz): <span id="rateValue">25</span></label>
+				<input id="rate" type="range" min="10" max="50" value="25" step="1">
+			</div>
+			<div class="control row">
+				<button id="startBtn">Start</button>
+				<button id="stopBtn" disabled>Stop</button>
+			</div>
+			<div class="status">
+				<div>WS endpoint: <code id="wsUrl">ws://feib.nl:5003</code></div>
+				<div>Active sockets: <span id="socketCount">0</span></div>
+			</div>
+		</div>
+		<div class="canvas-wrap">
+			<!-- p5 inserts canvas here -->
+			<script src="./sketch.js"></script>
+		</div>
+	</div>
+</body>
+</html>

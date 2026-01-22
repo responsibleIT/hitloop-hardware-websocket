@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Device Emulator</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="/static/vendor/js/p5.min.js"></script>
+    <script src="/config.js"></script>
+    <script>
+      window.DEFAULT_WS_URL = (window.APP_CONFIG && window.APP_CONFIG.wsDefaultUrl) || "ws://localhost:5003/";
+    </script>
+  </head>
+  <body>
+    <div class="wrap">
+      <div id="canvasWrap"></div>
+    </div>
+    <script src="./client.js"></script>
+  </body>
+</html>
