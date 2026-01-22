@@ -1,6 +1,6 @@
 # Hitloop Device Dashboard
 
-This is the Device Dashboard application for the Hitloop system. It allows you to view the devices in the Hitloop system.
+The Device Dashboard application allows you to view the devices in the Hitloop system.
 
 ## Features
 

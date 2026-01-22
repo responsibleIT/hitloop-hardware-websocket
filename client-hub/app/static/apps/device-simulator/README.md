@@ -1,6 +1,6 @@
 # Hitloop Device Simulator
 
-This is the Device Simulator application for the Hitloop system. It allows you to simulate multiple devices in the Hitloop system.
+The Device Simulator application allows you to simulate multiple devices in the Hitloop system.
 
 ## Features
 

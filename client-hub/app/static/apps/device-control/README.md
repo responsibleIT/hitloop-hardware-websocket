@@ -1,6 +1,6 @@
 # Hitloop Device Control
 
-This is the Device Control application for the Hitloop system. It allows you to control the devices in the Hitloop system.
+The Device Control application allows you to control the devices in the Hitloop system.
 
 ## Features
 

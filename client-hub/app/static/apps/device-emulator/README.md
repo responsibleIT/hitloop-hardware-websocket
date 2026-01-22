@@ -1,6 +1,6 @@
 # Hitloop Device Emulator
 
-This is the Device Emulator application for the Hitloop system. It allows you to emulate the devices in the Hitloop system using a mobile device.
+The Device Emulator application allows you to emulate the devices in the Hitloop system using a mobile device.
 
 ## Features
 
