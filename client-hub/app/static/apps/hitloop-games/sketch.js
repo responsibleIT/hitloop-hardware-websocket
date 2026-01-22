@@ -50,6 +50,9 @@ WebMidi.enable()
 //  sceneManager.addScene('eyes', new EyeDeviceScene(deviceManager));
 // sceneManager.addScene('rainyDayGroup', new RainyDayGroup(deviceManager));
  
+sceneManager.addScene('controlTheBall', new ControlTheBall(deviceManager));
+sceneManager.addScene('fountain', new Fountain(deviceManager));
+sceneManager.addScene('dayAndNight', new DayAndNight(deviceManager));
 sceneManager.addScene('rainyDaySingle', new RainyDaySingle(deviceManager));
 sceneManager.addScene('particles', new Particles(deviceManager));
 sceneManager.addScene('twoPlanets', new TwoPlanets(deviceManager));
