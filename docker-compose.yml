@@ -29,3 +29,11 @@ services:
     environment:
       <<: [*ws_env, *cdn_env]
       DEFAULT_APP: ${DEFAULT_APP:-}
+  docs:
+    build:
+      context: ./documentation
+      dockerfile: Dockerfile
+    ports:
+      - "5006:5000" # MkDocs documentation
+    volumes:
+      - ./documentation:/site

@@ -51,7 +51,8 @@ def create_app() -> Flask:
         if default_app and default_app in apps:
             return redirect(url_for("serve_app_index", app_name=default_app))
         readmes = {name: _read_readme_html(name) for name in apps}
-        return render_template("landing.html", apps=apps, readmes=readmes)
+        docs_url = os.environ.get("DOCS_URL", "http://localhost:5006/")
+        return render_template("landing.html", apps=apps, readmes=readmes, docs_url=docs_url)
 
     @app.route("/health")
     def health():

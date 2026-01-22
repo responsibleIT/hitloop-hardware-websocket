@@ -8,6 +8,7 @@ Single Flask application that serves all client UIs under `/apps/<name>/` from `
 - `app/static/apps/<name>`: each client’s self-contained HTML/CSS/JS.
 - `app/templates/landing.html`: landing page listing detected apps.
 - Optional `app/static/apps/<name>/README.md` is rendered on the landing card.
+- Landing links to docs via `DOCS_URL` (default `http://localhost:5006/`).
 
 ## Running locally
 ```bash
@@ -23,6 +24,7 @@ Environment variables:
 - `WS_DEFAULT_URL` (default `ws://localhost:5003/`) → injected via `/config.js`.
 - `CDN_BASE_URL` (default `/static/vendor`) → emitted by `/config.js` for future use.
 - `DEFAULT_APP` → when set to an app folder name, `/` redirects to it.
+- `DOCS_URL` (default `http://localhost:5006/`) → link on the landing page.
 
 ## Add / remove apps
 1. Create a folder in `app/static/apps/<your-app>/` with an `index.html` plus any JS/CSS/assets.

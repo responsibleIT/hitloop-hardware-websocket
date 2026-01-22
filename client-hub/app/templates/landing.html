@@ -23,12 +23,18 @@
       details.readme pre { background: #0f172a; color: #e2e8f0; padding: 8px; border-radius: 6px; overflow-x: auto; }
       .empty { padding: 16px; border: 1px dashed #cbd5e1; border-radius: 10px; background: #fff; color: #475569; max-width: 640px; }
       code { background: #e2e8f0; padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+      .actions { display: flex; gap: 12px; align-items: center; margin-top: 6px; }
+      .docs-link { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-weight: 600; color: #2563eb; }
+      .docs-link:hover { color: #1d4ed8; }
     </style>
   </head>
   <body>
     <header>
       <h1>Client Applications</h1>
       <p>Pick an app to open. Drop a new folder into <code>static/apps</code> and restart to add more.</p>
+      <div class="actions">
+        <a class="docs-link" href="{{ docs_url }}" target="_blank" rel="noreferrer">Documentation ↗</a>
+      </div>
     </header>
     <main>
       {% if apps %}
