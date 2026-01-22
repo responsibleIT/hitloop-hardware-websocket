@@ -36,4 +36,5 @@ services:
     ports:
       - "5006:5000" # MkDocs documentation
     volumes:
-      - ./documentation:/site
+      - ./documentation/mkdocs.yml:/site/mkdocs.yml:ro
+      - ./documentation/docs:/site/docs

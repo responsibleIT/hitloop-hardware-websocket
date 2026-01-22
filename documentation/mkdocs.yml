@@ -26,30 +26,12 @@ nav:
   - Home: index.md
   - Architecture:
     - Overview: architecture/overview.md
-    - Services: architecture/services.md
-    - Communication: architecture/communication.md
-    - Data Flow: architecture/data-flow.md
-  - Firmware:
-    - Architecture: firmware/architecture.md
-    - Processes: firmware/processes.md
-    - Adding Processes: firmware/adding-process.md
-    - Adding Commands: firmware/adding-commands.md
-    - Configuration: firmware/configuration.md
+    - Firmware Architecture: firmware/architecture.md
   - Deployment:
-    - Quick Start: deployment/quick-start.md
-    - Configuration: deployment/configuration.md
-    - New Host Setup: deployment/new-host.md
-    - Firmware Upload: deployment/firmware-upload.md
+    - Deployment Structure: deployment/structure.md
   - Development:
-    - Extending System: development/extending-system.md
-    - Client Libraries: development/client-libraries.md
-    - Testing: development/testing.md
-  - Socket Demo:
-    - Overview: socket-demo/index.md
-    - Classes: socket-demo/classes.md
-    - How-to: socket-demo/howto.md
-  - Hardware:
-    - Overview: hardware/hardware.md
+    - Extending the System: development/extending-system.md
+    - Browser API Reference: development/api-reference.md
 plugins:
   - search
   - mermaid2

@@ -1,3 +1,70 @@
+--- 
+title: GroupLoop Documentation
+---
+
+# GroupLoop Overview
+
+GroupLoop links custom wearable devices to interactive browser experiences and real-time data visualisations. The stack is intentionally lightweight: a Python WebSocket bridge, a Flask “client hub” that serves web apps, and firmware running on each device that speaks the same command/data protocol.
+
+!!! note "What this page covers"
+    - What lives in this repository  
+    - How data flows end-to-end  
+    - Where to look for more detail in the sections below
+
+## System at a Glance
+
+```mermaid
+flowchart LR
+    subgraph Devices
+      FW["ESP32 Firmware<br>>(BLE, IMU, LEDs, Motor)"]
+    end
+    subgraph Server
+      WS["Socket Server<br>>Python WebSocket bridge"]
+      HUB["Client Hub<br>>Flask + static apps"]
+    end
+    subgraph Frontend
+      APPS["Browser apps<br>>(p5.js, dashboards, games)"]
+      VENDOR["Shared libs<br>>HitloopDevice*"]
+    end
+
+    FW -- "hex frames<br>>sensor data" --> WS
+    HUB -- "serves /apps/<name>" --> APPS
+    APPS -- "WebSocket<br>>via HitloopDeviceManager" --> WS
+    WS -- "commands<br>>cmd:<id>:<name>:..." --> FW
+```
+
+## Key Pieces
+
+- **Firmware** (`grouploop-firmware/`): modular processes for BLE scanning, IMU sampling, LED and vibration control, Wi‑Fi + WebSocket connectivity, and a command registry.
+- **Socket server** (`socket-server/`): Python WebSocket endpoint that relays device frames to clients and forwards commands back to devices.
+- **Client hub** (`client-hub/`): Flask app that auto-discovers apps under `app/static/apps/<name>`; exposes shared vendor libraries at `app/static/vendor/js/`.
+- **Hitloop games** (`client-hub/app/static/apps/hitloop-games/`): p5.js scenes orchestrated by `SceneManager` and driven by `HitloopDeviceManager`.
+- **Documentation** (`documentation/`): MkDocs Material with Mermaid enabled (`mermaid2` plugin). This folder hosts the pages you are reading.
+
+## End-to-End Data Flow
+
+```mermaid
+sequenceDiagram
+    participant Device as Device (firmware)
+    participant WS as Socket Server
+    participant Hub as Client Hub
+    participant App as Browser App
+
+    Device->>WS: hex frame (id + sensors + tap)
+    WS-->>App: WebSocket message (same hex frame)
+    App->>App: HitloopDevice.parseHexData()
+    App->>WS: cmd:<id>:<command>:<params>
+    WS-->>Device: forward command
+    Device->>Device: CommandRegistry executes handler
+```
+
+## Where to Go Next
+
+- Deployment details: `deployment/structure.md`
+- Extending the system: `development/extending-system.md`
+- Browser API reference: `development/api-reference.md`
+- Firmware internals: `firmware/architecture.md`
+
 # GroupLoop
 
 A modular system for real-time interaction with a swarm of physical devices over WebSockets. Devices stream sensor data (accelerometer and beacon RSSI) and accept control commands (vibration motor and RGB LEDs). The stack includes a WebSocket server, web clients, simulators/emulators for development, and a CDN for shared libraries — all containerized via Docker.
@@ -51,13 +118,13 @@ flowchart LR
   end
 
   subgraph Sources
-    D1["Physical devices\n(grouploop-firmware)"]
+    D1["Physical devices<br>>(grouploop-firmware)"]
     S1["socket-simulator"]
     E1["device-emulator"]
   end
 
-  WS["socket-server\n(WebSocket)"]
-  CDN["cdn-server\n(static JS/firmware)"]
+  WS["socket-server<br>>(WebSocket)"]
+  CDN["cdn-server<br>>(static JS/firmware)"]
 
   D1 -- WS --> WS
   S1 -- WS --> WS

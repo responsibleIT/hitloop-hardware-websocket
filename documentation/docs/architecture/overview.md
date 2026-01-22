@@ -1,137 +1,79 @@
-# GroupLoop Architecture Overview
+---
+title: System Architecture
+---
 
-GroupLoop is a modular system for real-time interaction with a swarm of physical devices over WebSockets. The system enables rapid prototyping and visualization of many devices concurrently, providing consistent device data models and control APIs across applications.
+# System Architecture
 
-## System Architecture
+This page decomposes GroupLoop into services and protocols so you can understand how sensor frames, commands, and UI flows move through the stack.
 
-```mermaid
-graph TB
-    subgraph "Physical Layer"
-        D1[Physical Devices<br/>ESP32-C3 + Sensors]
-        D2[BLE Beacons<br/>Position Reference]
-    end
-    
-    subgraph "Network Layer"
-        WS[WebSocket Server<br/>socket-server:5003]
-        CDN[CDN Server<br/>cdn-server:5008]
-    end
-    
-    subgraph "Application Layer"
-        CLIENT[Client UI<br/>socket-client:5004]
-        CONTROL[Device Control<br/>device-control:5009]
-        SIM[Simulator<br/>socket-simulator:5005]
-        EMU[Device Emulator<br/>device-emulator:5007]
-        DEMO[Socket Demo<br/>p5.js Scenes]
-    end
-    
-    subgraph "Development Tools"
-        DOCS[Documentation<br/>docs:5006]
-    end
-    
-    D1 -->|WebSocket| WS
-    D2 -->|BLE| D1
-    WS -->|WebSocket| CLIENT
-    WS -->|WebSocket| CONTROL
-    WS -->|WebSocket| SIM
-    WS -->|WebSocket| EMU
-    WS -->|WebSocket| DEMO
-    
-    CDN -->|HTTP/JS| CLIENT
-    CDN -->|HTTP/JS| CONTROL
-    CDN -->|HTTP/JS| SIM
-    CDN -->|HTTP/JS| EMU
-    CDN -->|HTTP/JS| DEMO
-```
-
-## Core Components
-
-### 1. Device Layer
-- **Physical Devices**: ESP32-C3 microcontrollers with sensors (IMU, LEDs, vibration motor)
-- **BLE Beacons**: Position reference beacons for spatial awareness
-- **Firmware**: Modular process-based architecture with command registry
-
-### 2. Communication Layer
-- **WebSocket Server**: Central hub for device and client communication
-- **CDN Server**: Serves shared JavaScript libraries and firmware files
-- **Command Protocol**: ASCII-hex format for device commands and responses
-
-### 3. Application Layer
-- **Client Applications**: Web-based UIs for device monitoring and control
-- **Simulation Tools**: Virtual devices for development and testing
-- **Demo Applications**: Interactive p5.js scenes for visualization
-
-## Data Flow
+## Logical View
 
 ```mermaid
-sequenceDiagram
-    participant Device as Physical Device
-    participant Server as WebSocket Server
-    participant Client as Client Application
-    participant CDN as CDN Server
-    
-    Note over Device,CDN: Device Registration & Data Streaming
-    Device->>Server: Connect & Register (device_id)
-    Server->>Client: Broadcast device connection
-    
-    loop Continuous Data Stream
-        Device->>Server: Sensor data (IMU, BLE RSSI)
-        Server->>Client: Forward sensor data
-        Client->>CDN: Load shared libraries
-        CDN-->>Client: Return JS libraries
+flowchart TD
+    subgraph Infra
+      Docker[Docker Compose]
     end
-    
-    Note over Device,CDN: Command Execution
-    Client->>Server: Send command (led:vibrate:etc)
-    Server->>Device: Route command to device
-    Device->>Device: Execute command
-    Device->>Server: Command result/status
-    Server->>Client: Forward result
+    subgraph Backend
+      Socket[Socket Server\nPython + websockets]
+      Docs[Docs\nMkDocs]
+    end
+    subgraph Frontend
+      Hub[Client Hub\nFlask + static apps]
+      Apps[Apps\np5.js, dashboards, games]
+      Vendor[Vendor libs\nHitloopDevice*]
+    end
+    subgraph Devices
+      FW[ESP32 Firmware]
+    end
+
+    Docker --> Socket
+    Docker --> Hub
+    Docker --> Docs
+    FW <--> Socket
+    Apps -- served by --> Hub
+    Apps --> Vendor
+    Apps <--> Socket
 ```
 
-## Service Dependencies
+**Data plane**
+- Devices emit fixed-length hex frames containing ID, IMU, distance sensors, and tap flag.
+- Socket server fans out frames over WebSocket to any connected browser clients.
+- Browser apps use `HitloopDeviceManager` to manage connections, validate commands against `commands.json`, and send back `cmd:<id>:<command>:...` strings.
+- Firmware `CommandRegistry` executes the parsed commands and updates LEDs, vibration motors, or configuration.
+
+**Control plane**
+- `ProcessManager` in firmware starts/stops processes (BLE scanning, IMU sampling, Wi‑Fi, LED behaviors) based on connectivity state.
+- Client hub auto-discovers app folders; landing page renders READMEs and links.
+
+## Component Responsibilities
+
+- **Socket server**: stateless relay, validates frame length/charset, binds on configurable host/port.
+- **Client hub**: serves static apps, exposes `/config.js` with `WS_DEFAULT_URL`, `CDN_BASE_URL`, and `DEFAULT_APP`.
+- **Hitloop games**: `SceneManager` routes key presses to the active `Scene`, while `HitloopDeviceManager` keeps device state fresh and prunes inactive devices.
+- **Firmware**: shares a single `WebSocketManager` for outbound commands and inbound frames; `Process` subclasses isolate concerns (LED, vibration, IMU, BLE).
+
+## Message Formats
 
 ```mermaid
-graph LR
-    subgraph "Core Services"
-        WS[WebSocket Server]
-        CDN[CDN Server]
-    end
-    
-    subgraph "Client Services"
-        CLIENT[Client UI]
-        CONTROL[Device Control]
-        SIM[Simulator]
-        EMU[Emulator]
-    end
-    
-    subgraph "Development"
-        DOCS[Documentation]
-    end
-    
-    WS -.->|Commands JSON| CDN
-    CLIENT -->|WebSocket| WS
-    CLIENT -->|JS Libraries| CDN
-    CONTROL -->|WebSocket| WS
-    CONTROL -->|JS Libraries| CDN
-    SIM -->|WebSocket| WS
-    SIM -->|JS Libraries| CDN
-    EMU -->|WebSocket| WS
-    EMU -->|JS Libraries| CDN
+erDiagram
+    FRAME {
+      string idHex "4 hex chars"
+      uint8 ax "0-255"
+      uint8 ay
+      uint8 az
+      uint8 dNW
+      uint8 dNE
+      uint8 dSE
+      uint8 dSW
+      uint8 tap "255=true, 0=false"
+    }
+    COMMAND {
+      string idHex "device target"
+      string name "e.g. led, vibrate"
+      string params "colon-delimited"
+    }
 ```
 
-## Key Design Principles
+!!! tip "Keep the frames tight"
+    Frames are sliced to 20 hex characters before parsing. If you add fields, align client and firmware parsers and update `commands.json` plus any data visualizations.
 
-1. **Modularity**: Each service is independently deployable and configurable
-2. **Real-time Communication**: WebSocket-based for low-latency device interaction
-3. **Shared Libraries**: Common device abstractions via CDN for consistency
-4. **Development Support**: Simulators and emulators for hardware-free development
-5. **Extensibility**: Plugin-based firmware architecture with command registry
-
-## Technology Stack
-
-- **Backend**: Python Flask with WebSockets
-- **Frontend**: HTML5, JavaScript, p5.js
-- **Firmware**: Arduino/ESP32 with PlatformIO
-- **Containerization**: Docker & Docker Compose
-- **Documentation**: MkDocs with Material theme
-- **Communication**: WebSocket protocol with ASCII-hex encoding
