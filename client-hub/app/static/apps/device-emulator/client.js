@@ -27,6 +27,8 @@ let hasAccelerometer = false;
 let wakeLockSentinel = null;
 let resizeObserver = null;
 let gravityG = { x: 0, y: 0, z: 1 };
+let canvasEl = null;
+const RESIZE_JITTER_PX = 8;
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 function toHexByte(n) { return clamp(Math.round(n), 0, 255).toString(16).padStart(2, '0'); }
@@ -55,10 +57,21 @@ function resizeCanvasToViewport() {
     const prevX = circlePos.x;
     const prevY = circlePos.y;
     const { w, h } = getCanvasSize();
+    const dw = Math.abs(w - prevW);
+    const dh = Math.abs(h - prevH);
+    if (dw <= RESIZE_JITTER_PX && dh <= RESIZE_JITTER_PX) return;
     if (w === prevW && h === prevH) return;
     resizeCanvas(w, h);
     circlePos.x = clamp((prevX / prevW) * w, 0, w);
     circlePos.y = clamp((prevY / prevH) * h, 0, h);
+}
+
+function toCanvasCoords(clientX, clientY) {
+    if (!canvasEl) return { x: clientX, y: clientY };
+    const rect = canvasEl.getBoundingClientRect();
+    const localX = ((clientX - rect.left) / Math.max(1, rect.width)) * width;
+    const localY = ((clientY - rect.top) / Math.max(1, rect.height)) * height;
+    return { x: localX, y: localY };
 }
 
 function byteToG(v) {
@@ -245,6 +258,7 @@ window.setup = function() {
     const { w, h } = getCanvasSize();
     const c = createCanvas(w, h, WEBGL);
     c.parent(document.getElementById('canvasWrap'));
+    canvasEl = c.elt;
     if (uiFont) {
         textFont(uiFont);
     }
@@ -381,8 +395,20 @@ window.mousePressed = function() { startInteraction(mouseX, mouseY); }
 window.mouseDragged = function() { continueInteraction(mouseX, mouseY); }
 window.mouseReleased = function() { endInteraction(); }
 
-window.touchStarted = function(e) { if (e.touches && e.touches[0]) startInteraction(e.touches[0].clientX, e.touches[0].clientY); return false; }
-window.touchMoved = function(e) { if (e.touches && e.touches[0]) continueInteraction(e.touches[0].clientX, e.touches[0].clientY); return false; }
+window.touchStarted = function(e) {
+    if (e.touches && e.touches[0]) {
+        const p = toCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
+        startInteraction(p.x, p.y);
+    }
+    return false;
+}
+window.touchMoved = function(e) {
+    if (e.touches && e.touches[0]) {
+        const p = toCanvasCoords(e.touches[0].clientX, e.touches[0].clientY);
+        continueInteraction(p.x, p.y);
+    }
+    return false;
+}
 window.touchEnded = function() { endInteraction(); }
 
 window.windowResized = function() {
