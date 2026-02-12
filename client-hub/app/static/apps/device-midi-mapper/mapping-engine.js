@@ -13,6 +13,7 @@
       rt = {
         previousTap: false,
         smoothValues: {}, // sensorKey -> last smoothed numeric value
+        lastOutputValues: {}, // sensorKey -> last mapped MIDI value
       };
       runtimeByDevice.set(deviceId, rt);
     }
@@ -122,7 +123,9 @@
         mapping.outputMax,
         !!mapping.invert
       );
-      midi.sendControlChange(mapping.ccNumber || 0, Math.round(value), mapping.channel || 1);
+      const rounded = Math.round(value);
+      runtime.lastOutputValues[key] = rounded;
+      midi.sendControlChange(mapping.ccNumber || 0, rounded, mapping.channel || 1);
     });
 
     // Magnitude: derived movement in G's, default input range 0..2
@@ -143,7 +146,9 @@
         magMapping.outputMax,
         !!magMapping.invert
       );
-      midi.sendControlChange(magMapping.ccNumber || 0, Math.round(value), magMapping.channel || 1);
+      const rounded = Math.round(value);
+      runtime.lastOutputValues.magnitude = rounded;
+      midi.sendControlChange(magMapping.ccNumber || 0, rounded, magMapping.channel || 1);
     }
 
     // Tap: boolean -> Note On + timed Note Off on rising edge
@@ -156,10 +161,17 @@
         const velocity = tapMapping.velocity || 110;
         const channel = tapMapping.channel || 1;
         const durationMs = tapMapping.durationMs || 200;
+        runtime.lastOutputValues.tap = velocity;
         midi.sendNoteOn(noteNumber, velocity, channel);
         window.setTimeout(() => {
           midi.sendNoteOff(noteNumber, channel);
+          // After the note is released, treat the mapped value as 0
+          const rt = getOrCreateRuntime(deviceId);
+          rt.lastOutputValues.tap = 0;
         }, durationMs);
+      } else if (!currentTap) {
+        // No tap now; if we are not in a note-on window, treat mapped value as 0
+        runtime.lastOutputValues.tap = runtime.lastOutputValues.tap || 0;
       }
       runtime.previousTap = currentTap;
     }
@@ -176,12 +188,21 @@
     });
   }
 
+  function getLastValue(deviceId, sensorKey) {
+    const rt = runtimeByDevice.get(deviceId);
+    if (!rt || !rt.lastOutputValues) return null;
+    const key = String(sensorKey);
+    if (!(key in rt.lastOutputValues)) return null;
+    return rt.lastOutputValues[key];
+  }
+
   window.DeviceMidiMappingEngine = {
     SENSOR_KEYS: SENSOR_KEYS.slice(),
     ensureDeviceMappings,
     createDefaultMappingForSensor,
     processDevice,
     processAllDevices,
+    getLastValue,
   };
 })();
 

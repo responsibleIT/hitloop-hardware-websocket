@@ -306,7 +306,17 @@
       { key: "tap", label: "Tap" },
     ];
 
-    rows.forEach((row) => {
+    const enabledRows = rows.filter((row) => {
+      const mapping = deviceMappings[row.key];
+      return mapping && mapping.enabled;
+    });
+
+    const availableRows = rows.filter((row) => {
+      const mapping = deviceMappings[row.key];
+      return !mapping || !mapping.enabled;
+    });
+
+    enabledRows.forEach((row) => {
       const mapping = deviceMappings[row.key];
       const tr = document.createElement("tr");
 
@@ -389,11 +399,54 @@
       }
       tr.appendChild(durationTd);
 
+      const valueTd = document.createElement("td");
+      const lastValue =
+        DeviceMidiMappingEngine.getLastValue(deviceId, row.key);
+      valueTd.textContent =
+        lastValue === null || typeof lastValue === "undefined"
+          ? "—"
+          : String(Math.round(lastValue));
+      tr.appendChild(valueTd);
+
       tbody.appendChild(tr);
     });
 
-    // Attach change listeners after building the rows
+    // Add-mapping control: only show when there are unmapped sensor outputs
+    if (availableRows.length > 0) {
+      const addTr = document.createElement("tr");
+      const addTd = document.createElement("td");
+      addTd.colSpan = 7;
+
+      const labelSpan = document.createElement("span");
+      labelSpan.textContent = "Add mapping:";
+      labelSpan.className = "mapping-add-label";
+      addTd.appendChild(labelSpan);
+
+      const select = document.createElement("select");
+      select.className = "mapping-add-select";
+      select.dataset.deviceId = deviceId;
+      availableRows.forEach((row) => {
+        const opt = document.createElement("option");
+        opt.value = row.key;
+        opt.textContent = row.label;
+        select.appendChild(opt);
+      });
+      addTd.appendChild(select);
+
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.textContent = "+";
+      addBtn.className = "mapping-add-btn";
+      addBtn.dataset.deviceId = deviceId;
+      addTd.appendChild(addBtn);
+
+      addTr.appendChild(addTd);
+      tbody.appendChild(addTr);
+    }
+
+    // Attach listeners after building the rows
     node.addEventListener("change", handleMappingChange);
+    node.addEventListener("click", handleAddMappingClick);
 
     return node;
   }
@@ -427,6 +480,35 @@
     }
 
     persistState();
+  }
+
+  function handleAddMappingClick(event) {
+    const target = event.target;
+    if (!target.classList.contains("mapping-add-btn")) return;
+
+    const deviceId = target.dataset.deviceId;
+    if (!deviceId) return;
+
+    const container = target.parentElement;
+    if (!container) return;
+
+    const select = container.querySelector(".mapping-add-select");
+    if (!select) return;
+
+    const sensorKey = select.value;
+    if (!sensorKey) return;
+
+    const deviceMappings = DeviceMidiMappingEngine.ensureDeviceMappings(
+      state.mappingsByDevice,
+      deviceId
+    );
+    const mapping = deviceMappings[sensorKey];
+    if (!mapping) return;
+
+    mapping.enabled = true;
+    persistState();
+    // Re-render all devices so the new mapping row appears
+    renderDevices();
   }
 
   document.addEventListener("DOMContentLoaded", init);
