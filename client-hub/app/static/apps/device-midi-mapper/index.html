@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Device MIDI Mapper</title>
+    <link rel="stylesheet" href="./styles.css" />
+
+    <script src="/static/vendor/js/HitloopDevice.js"></script>
+    <script src="/static/vendor/js/HitloopDeviceManager.js"></script>
+    <script src="/config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/webmidi@latest/dist/webmidi.iife.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="app-header-main">
+        <h1 class="app-title">Device MIDI Mapper</h1>
+        <p class="app-subtitle">
+          Map device motion and taps to MIDI control change and note messages.
+        </p>
+      </div>
+      <div class="app-header-status">
+        <div class="ws-config">
+          <label for="wsUrl">WS URL</label>
+          <input id="wsUrl" type="text" size="32" />
+          <button id="connectBtn" type="button">Connect</button>
+          <span id="wsStatus" class="status-pill status-pill--disconnected">disconnected</span>
+        </div>
+        <div class="midi-config">
+          <label for="midiOutputSelect">MIDI Output</label>
+          <select id="midiOutputSelect">
+            <option value="">No outputs available</option>
+          </select>
+          <button id="refreshMidiBtn" type="button">Refresh</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <section class="panel panel--narrow">
+        <header class="panel-header">
+          <h2 class="panel-title">Presets</h2>
+        </header>
+        <div class="panel-body panel-body--stack">
+          <button id="savePresetBtn" type="button">Save to browser</button>
+          <button id="loadPresetBtn" type="button">Load from browser</button>
+
+          <div class="preset-actions">
+            <button id="exportPresetBtn" type="button">Export JSON</button>
+            <label class="file-button">
+              <span>Import JSON</span>
+              <input id="importPresetInput" type="file" accept="application/json" />
+            </label>
+          </div>
+          <p class="hint">
+            Presets are stored locally per browser. Use JSON export/import to share or move
+            mappings.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel panel--wide">
+        <header class="panel-header">
+          <h2 class="panel-title">Devices</h2>
+          <div class="panel-header-meta">
+            <span id="deviceCount">0 devices</span>
+            <span id="wsLastUpdate" class="meta-muted">no data yet</span>
+          </div>
+        </header>
+        <div id="devicesContainer" class="panel-body devices-container">
+          <!-- Filled by client.js -->
+        </div>
+      </section>
+    </main>
+
+    <template id="deviceTemplate">
+      <article class="device-card">
+        <header class="device-card-header">
+          <div>
+            <h3 class="device-id"></h3>
+            <p class="device-meta"></p>
+          </div>
+          <span class="status-pill status-pill--device">active</span>
+        </header>
+        <table class="mapping-table">
+          <thead>
+            <tr>
+              <th>Signal</th>
+              <th>Enabled</th>
+              <th>Channel</th>
+              <th>CC / Note</th>
+              <th>Velocity</th>
+              <th>Duration (ms)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Rows inserted by client.js -->
+          </tbody>
+        </table>
+        <p class="hint hint--small">
+          Advanced options (ranges, invert, smoothing) are stored but hidden for now.
+        </p>
+      </article>
+    </template>
+
+    <script src="./storage.js"></script>
+    <script src="./midi.js"></script>
+    <script src="./mapping-engine.js"></script>
+    <script src="./client.js"></script>
+  </body>
+  <script>
+    // Fill WS URL from config once DOM is ready
+    document.addEventListener("DOMContentLoaded", () => {
+      const defaultWsUrl =
+        (window.APP_CONFIG && window.APP_CONFIG.wsDefaultUrl) || "ws://localhost:5003/";
+      const input = document.getElementById("wsUrl");
+      if (input && !input.value) {
+        input.value = defaultWsUrl;
+      }
+    });
+  </script>
+</html>
+

@@ -23,6 +23,9 @@ let uiFont = null;
 let rotX = 0; // pitch
 let rotY = 0; // yaw
 let rotZ = 0; // roll (unused by drag, kept for completeness)
+let hasAccelerometer = false;
+let wakeLockSentinel = null;
+let resizeObserver = null;
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 function toHexByte(n) { return clamp(Math.round(n), 0, 255).toString(16).padStart(2, '0'); }
@@ -31,6 +34,97 @@ function toHexWord(n) { return clamp(Math.round(n), 0, 65535).toString(16).padSt
 function mapRange(v, inMin, inMax, outMin, outMax) {
     const t = (v - inMin) / (inMax - inMin);
     return outMin + (outMax - outMin) * t;
+}
+
+function getCanvasSize() {
+    const host = document.getElementById('canvasWrap');
+    if (!host) {
+        return { w: window.innerWidth, h: window.innerHeight };
+    }
+    return {
+        w: Math.max(1, Math.floor(host.clientWidth || window.innerWidth)),
+        h: Math.max(1, Math.floor(host.clientHeight || window.innerHeight)),
+    };
+}
+
+function resizeCanvasToViewport() {
+    if (typeof width !== 'number' || typeof height !== 'number') return;
+    const prevW = Math.max(1, width);
+    const prevH = Math.max(1, height);
+    const prevX = circlePos.x;
+    const prevY = circlePos.y;
+    const { w, h } = getCanvasSize();
+    if (w === prevW && h === prevH) return;
+    resizeCanvas(w, h);
+    circlePos.x = clamp((prevX / prevW) * w, 0, w);
+    circlePos.y = clamp((prevY / prevH) * h, 0, h);
+}
+
+function byteToG(v) {
+    return mapRange(v, 0, 255, -2, 2);
+}
+
+function updateCubeFromAccelerometer() {
+    const axG = byteToG(acc.ax);
+    const ayG = byteToG(acc.ay);
+    const azG = byteToG(acc.az);
+    rotX = Math.atan2(-ayG, Math.sqrt((axG * axG) + (azG * azG)));
+    rotY = Math.atan2(axG, Math.sqrt((ayG * ayG) + (azG * azG)));
+    rotZ = 0;
+}
+
+function addOneShotGestureListener(handler) {
+    let done = false;
+    const wrapped = async () => {
+        if (done) return;
+        done = true;
+        window.removeEventListener('pointerup', wrapped);
+        window.removeEventListener('touchend', wrapped);
+        window.removeEventListener('click', wrapped);
+        window.removeEventListener('keydown', wrapped);
+        await handler();
+    };
+    window.addEventListener('pointerup', wrapped, { passive: true });
+    window.addEventListener('touchend', wrapped, { passive: true });
+    window.addEventListener('click', wrapped, { passive: true });
+    window.addEventListener('keydown', wrapped, { passive: true });
+}
+
+async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    if (wakeLockSentinel) return;
+    try {
+        wakeLockSentinel = await navigator.wakeLock.request('screen');
+        wakeLockSentinel.addEventListener('release', () => {
+            wakeLockSentinel = null;
+        });
+    } catch (_) {
+        // Best effort only.
+    }
+}
+
+function orientationLockMode() {
+    const type = (screen.orientation && screen.orientation.type) || '';
+    return type.startsWith('landscape') ? 'landscape' : 'portrait';
+}
+
+async function requestImmersiveMode() {
+    try {
+        const root = document.documentElement;
+        if (root.requestFullscreen && !document.fullscreenElement) {
+            await root.requestFullscreen();
+        }
+    } catch (_) {
+        // Best effort only.
+    }
+    try {
+        if (screen.orientation && typeof screen.orientation.lock === 'function') {
+            await screen.orientation.lock(orientationLockMode());
+        }
+    } catch (_) {
+        // Best effort only.
+    }
+    await requestWakeLock();
 }
 
 function triggerTap() {
@@ -51,6 +145,11 @@ function setupMotion() {
         const axMs2 = (e.accelerationIncludingGravity && typeof e.accelerationIncludingGravity.x === 'number') ? e.accelerationIncludingGravity.x : null;
         const ayMs2 = (e.accelerationIncludingGravity && typeof e.accelerationIncludingGravity.y === 'number') ? e.accelerationIncludingGravity.y : null;
         const azMs2 = (e.accelerationIncludingGravity && typeof e.accelerationIncludingGravity.z === 'number') ? e.accelerationIncludingGravity.z : null;
+        const hasMotionSample = axMs2 !== null || ayMs2 !== null || azMs2 !== null;
+        if (hasMotionSample) {
+            hasAccelerometer = true;
+            rotatingCube = false;
+        }
         const G = 9.80665; // m/s^2 per 1g
         if (axMs2 !== null) {
             const axG = axMs2 / G; // in g
@@ -66,13 +165,16 @@ function setupMotion() {
         }
     }
     window.addEventListener('devicemotion', handler, true);
-    // iOS permission request; auto-connect on first touch
-    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-        window.addEventListener('touchend', async () => {
+    const needsPermission = typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function';
+    if (needsPermission) {
+        addOneShotGestureListener(async () => {
+            await requestImmersiveMode();
             try { await DeviceMotionEvent.requestPermission(); } catch (_) {}
             connectWs();
-        }, { once: true });
+        });
     } else {
+        requestImmersiveMode();
+        addOneShotGestureListener(async () => { await requestImmersiveMode(); });
         connectWs();
     }
 }
@@ -122,7 +224,8 @@ window.preload = function() {
 }
 
 window.setup = function() {
-    const c = createCanvas(windowWidth, windowHeight, WEBGL);
+    const { w, h } = getCanvasSize();
+    const c = createCanvas(w, h, WEBGL);
     c.parent(document.getElementById('canvasWrap'));
     if (uiFont) {
         textFont(uiFont);
@@ -130,6 +233,21 @@ window.setup = function() {
     textSize(16);
     circlePos.x = width / 2;
     circlePos.y = height / 2;
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            requestWakeLock();
+        }
+    });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', resizeCanvasToViewport);
+    }
+    resizeObserver = new ResizeObserver(() => {
+        resizeCanvasToViewport();
+    });
+    const host = document.getElementById('canvasWrap');
+    if (host) {
+        resizeObserver.observe(host);
+    }
     setupMotion();
     setInterval(sendFrame, 50); // 20 Hz
 }
@@ -137,8 +255,11 @@ window.setup = function() {
 window.draw = function() {
     background(0);
 
-    // If rotating via on-screen cube, synthesize accelerometer from orientation
-    if (rotatingCube) {
+    // Map accelerometer values to cube orientation when available.
+    if (hasAccelerometer) {
+        updateCubeFromAccelerometer();
+    } else if (rotatingCube) {
+        // Fallback: synthesize accelerometer values from touch rotation.
         const g = 1.0;
         const axG = 2 * g * Math.sin(rotX);
         const ayG = 2 * g * Math.sin(rotY);
@@ -190,8 +311,9 @@ window.draw = function() {
     fill(255);
     textAlign(CENTER);
     const status = ws ? (ws.readyState === WebSocket.OPEN ? 'connected' : (ws.readyState === WebSocket.CONNECTING ? 'connecting' : 'disconnected')) : 'disconnected';
+    const controlMode = hasAccelerometer ? 'accelerometer' : 'touch-fallback';
     const tapStatus = tapState ? 'TAPPED!' : 'tap: click circle or press T/SPACE';
-    text(`status: ${status}  ws:${wsUrl}`, width/2, height - 36);
+    text(`status: ${status}  mode:${controlMode}  ws:${wsUrl}`, width/2, height - 36);
     text(`tap: ${tapStatus}`, width/2, height - 18);
     text(lastFrame || '', width/2, height - 6);
     pop();
@@ -213,7 +335,7 @@ function startInteraction(x, y) {
     }
     
     draggingCircle = insideCircle;
-    rotatingCube = !insideCircle;
+    rotatingCube = !insideCircle && !hasAccelerometer;
     lastMouse.x = x;
     lastMouse.y = y;
     if (draggingCircle) handleCirclePointer(x, y);
@@ -243,6 +365,10 @@ window.mouseReleased = function() { endInteraction(); }
 window.touchStarted = function(e) { if (e.touches && e.touches[0]) startInteraction(e.touches[0].clientX, e.touches[0].clientY); return false; }
 window.touchMoved = function(e) { if (e.touches && e.touches[0]) continueInteraction(e.touches[0].clientX, e.touches[0].clientY); return false; }
 window.touchEnded = function() { endInteraction(); }
+
+window.windowResized = function() {
+    resizeCanvasToViewport();
+}
 
 // Keyboard support for tap detection
 window.keyPressed = function() {
