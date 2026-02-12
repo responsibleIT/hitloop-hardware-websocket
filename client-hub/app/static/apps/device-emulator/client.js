@@ -26,6 +26,7 @@ let rotZ = 0; // roll (unused by drag, kept for completeness)
 let hasAccelerometer = false;
 let wakeLockSentinel = null;
 let resizeObserver = null;
+let gravityG = { x: 0, y: 0, z: 1 };
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 function toHexByte(n) { return clamp(Math.round(n), 0, 255).toString(16).padStart(2, '0'); }
@@ -65,12 +66,23 @@ function byteToG(v) {
 }
 
 function updateCubeFromAccelerometer() {
-    const axG = byteToG(acc.ax);
-    const ayG = byteToG(acc.ay);
-    const azG = byteToG(acc.az);
+    const axG = gravityG.x;
+    const ayG = gravityG.y;
+    const azG = gravityG.z;
     rotX = Math.atan2(-ayG, Math.sqrt((axG * axG) + (azG * azG)));
     rotY = Math.atan2(axG, Math.sqrt((ayG * ayG) + (azG * azG)));
     rotZ = 0;
+}
+
+function updateGravity(axG, ayG, azG) {
+    const alpha = 0.92;
+    gravityG.x = (alpha * gravityG.x) + ((1 - alpha) * axG);
+    gravityG.y = (alpha * gravityG.y) + ((1 - alpha) * ayG);
+    gravityG.z = (alpha * gravityG.z) + ((1 - alpha) * azG);
+    const mag = Math.hypot(gravityG.x, gravityG.y, gravityG.z) || 1;
+    gravityG.x /= mag;
+    gravityG.y /= mag;
+    gravityG.z /= mag;
 }
 
 function addOneShotGestureListener(handler) {
@@ -151,17 +163,23 @@ function setupMotion() {
             rotatingCube = false;
         }
         const G = 9.80665; // m/s^2 per 1g
+        let axG = gravityG.x;
+        let ayG = gravityG.y;
+        let azG = gravityG.z;
         if (axMs2 !== null) {
-            const axG = axMs2 / G; // in g
+            axG = axMs2 / G; // in g
             acc.ax = clamp(Math.round(mapRange(axG, -2, 2, 0, 255)), 0, 255);
         }
         if (ayMs2 !== null) {
-            const ayG = ayMs2 / G;
+            ayG = ayMs2 / G;
             acc.ay = clamp(Math.round(mapRange(ayG, -2, 2, 0, 255)), 0, 255);
         }
         if (azMs2 !== null) {
-            const azG = azMs2 / G;
+            azG = azMs2 / G;
             acc.az = clamp(Math.round(mapRange(azG, -2, 2, 0, 255)), 0, 255);
+        }
+        if (hasMotionSample) {
+            updateGravity(axG, ayG, azG);
         }
     }
     window.addEventListener('devicemotion', handler, true);
@@ -271,6 +289,7 @@ window.draw = function() {
 
     // Draw 3D cube with orientation axes in center (WEBGL coords)
     push();
+    translate(0, 0, 0);
     rotateZ(rotZ);
     rotateX(rotX);
     rotateY(rotY);
