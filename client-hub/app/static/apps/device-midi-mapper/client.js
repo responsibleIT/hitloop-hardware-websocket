@@ -398,16 +398,6 @@
       nameTd.textContent = row.label;
       tr.appendChild(nameTd);
 
-      const enabledTd = document.createElement("td");
-      const enabledInput = document.createElement("input");
-      enabledInput.type = "checkbox";
-      enabledInput.checked = !!mapping.enabled;
-      enabledInput.dataset.deviceId = deviceId;
-      enabledInput.dataset.sensorKey = row.key;
-      enabledInput.dataset.field = "enabled";
-      enabledTd.appendChild(enabledInput);
-      tr.appendChild(enabledTd);
-
       const channelTd = document.createElement("td");
       const channelInput = document.createElement("input");
       channelInput.type = "number";
@@ -437,6 +427,40 @@
       }
       ccNoteTd.appendChild(ccOrNoteInput);
       tr.appendChild(ccNoteTd);
+
+      const out0Td = document.createElement("td");
+      if (row.key === "tap") {
+        out0Td.textContent = "-";
+      } else {
+        const out0Input = document.createElement("input");
+        out0Input.type = "number";
+        out0Input.min = "0";
+        out0Input.max = "127";
+        out0Input.value =
+          typeof mapping.outputMin === "number" ? mapping.outputMin : 0;
+        out0Input.dataset.deviceId = deviceId;
+        out0Input.dataset.sensorKey = row.key;
+        out0Input.dataset.field = "outputMin";
+        out0Td.appendChild(out0Input);
+      }
+      tr.appendChild(out0Td);
+
+      const out255Td = document.createElement("td");
+      if (row.key === "tap") {
+        out255Td.textContent = "-";
+      } else {
+        const out255Input = document.createElement("input");
+        out255Input.type = "number";
+        out255Input.min = "0";
+        out255Input.max = "127";
+        out255Input.value =
+          typeof mapping.outputMax === "number" ? mapping.outputMax : 127;
+        out255Input.dataset.deviceId = deviceId;
+        out255Input.dataset.sensorKey = row.key;
+        out255Input.dataset.field = "outputMax";
+        out255Td.appendChild(out255Input);
+      }
+      tr.appendChild(out255Td);
 
       const velocityTd = document.createElement("td");
       if (row.key === "tap") {
@@ -500,7 +524,7 @@
     if (availableRows.length > 0) {
       const addTr = document.createElement("tr");
       const addTd = document.createElement("td");
-      addTd.colSpan = 8;
+      addTd.colSpan = 9;
 
       const labelSpan = document.createElement("span");
       labelSpan.textContent = "Add mapping:";
@@ -557,27 +581,6 @@
     const field = target.dataset.field;
     if (!deviceId || !sensorKey || !field) return;
 
-    if (target.type === "checkbox") {
-      const deviceMappings = DeviceMidiMappingEngine.ensureDeviceMappings(
-        state.mappingsByDevice,
-        deviceId
-      );
-      const mapping = deviceMappings[sensorKey];
-      if (!mapping) return;
-
-      mapping[field] = !!target.checked;
-
-      // Enabling/disabling a mapping changes which rows are visible, so rebuild this card.
-      if (field === "enabled") {
-        const card = deviceCards[deviceId];
-        if (card) {
-          rebuildDeviceCardMappings(card, deviceId);
-        }
-      }
-      persistState();
-      return;
-    }
-
     if (target.type === "number" || target.type === "text") {
       const val = target.value;
       const num = Number(val);
@@ -599,7 +602,9 @@
         );
         const mapping = deviceMappings[sensorKey];
         if (!mapping) return;
-        mapping[field] = isNaN(num) ? 0 : num;
+        const safe = isNaN(num) ? 0 : num;
+        // Generic clamp for value-like fields such as outputMin/outputMax/velocity.
+        mapping[field] = Math.min(127, Math.max(0, safe));
         persistState();
       }
       return;
