@@ -33,11 +33,12 @@
           </select>
           <button id="refreshMidiBtn" type="button">Refresh</button>
         </div>
+        <button id="togglePresetsBtn" type="button">Load / Save</button>
       </div>
     </header>
 
     <main class="app-main">
-      <section class="panel panel--narrow">
+      <section id="presetsPanel" class="panel panel--narrow panel--hidden">
         <header class="panel-header">
           <h2 class="panel-title">Presets</h2>
         </header>
@@ -92,6 +93,7 @@
               <th>Velocity</th>
               <th>Duration (ms)</th>
               <th>Value</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>

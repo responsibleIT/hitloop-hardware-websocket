@@ -145,15 +145,9 @@ button:disabled {
 .app-main {
   flex: 1;
   padding: 16px 20px 24px;
-  display: grid;
-  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 16px;
-}
-
-@media (max-width: 900px) {
-  .app-main {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .panel {
@@ -172,6 +166,10 @@ button:disabled {
 
 .panel--wide {
   min-height: 0;
+}
+
+.panel--hidden {
+  display: none;
 }
 
 .panel-header {
@@ -275,6 +273,22 @@ button:disabled {
 
 .mapping-table input[type="checkbox"] {
   transform: translateY(1px);
+}
+
+.mapping-add-label {
+  margin-right: 6px;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.mapping-add-select {
+  margin-right: 6px;
+}
+
+.mapping-add-btn,
+.mapping-remove-btn {
+  padding: 2px 8px;
+  font-size: 12px;
 }
 
 .hint {

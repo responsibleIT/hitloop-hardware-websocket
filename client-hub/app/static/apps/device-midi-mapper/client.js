@@ -13,6 +13,8 @@
   const connectBtn = document.getElementById("connectBtn");
   const midiOutputSelect = document.getElementById("midiOutputSelect");
   const refreshMidiBtn = document.getElementById("refreshMidiBtn");
+  const togglePresetsBtn = document.getElementById("togglePresetsBtn");
+  const presetsPanel = document.getElementById("presetsPanel");
   const savePresetBtn = document.getElementById("savePresetBtn");
   const loadPresetBtn = document.getElementById("loadPresetBtn");
   const exportPresetBtn = document.getElementById("exportPresetBtn");
@@ -29,6 +31,7 @@
   // the affected elements instead of re-rendering the whole container.
   const deviceCards = Object.create(null);
   let emptyStateEl = null;
+  const pendingFieldTimers = Object.create(null);
 
   function init() {
     // Restore from local storage
@@ -142,6 +145,12 @@
       // Reset so the same file can be selected again if needed
       importPresetInput.value = "";
     });
+
+    if (togglePresetsBtn && presetsPanel) {
+      togglePresetsBtn.addEventListener("click", () => {
+        presetsPanel.classList.toggle("panel--hidden");
+      });
+    }
   }
 
   function updateWsStatus(status) {
@@ -474,6 +483,16 @@
           : String(Math.round(lastValue));
       tr.appendChild(valueTd);
 
+      const removeTd = document.createElement("td");
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = "−";
+      removeBtn.className = "mapping-remove-btn";
+      removeBtn.dataset.deviceId = deviceId;
+      removeBtn.dataset.sensorKey = row.key;
+      removeTd.appendChild(removeBtn);
+      tr.appendChild(removeTd);
+
       tbody.appendChild(tr);
     });
 
@@ -481,7 +500,7 @@
     if (availableRows.length > 0) {
       const addTr = document.createElement("tr");
       const addTd = document.createElement("td");
-      addTd.colSpan = 7;
+      addTd.colSpan = 8;
 
       const labelSpan = document.createElement("span");
       labelSpan.textContent = "Add mapping:";
@@ -538,14 +557,14 @@
     const field = target.dataset.field;
     if (!deviceId || !sensorKey || !field) return;
 
-    const deviceMappings = DeviceMidiMappingEngine.ensureDeviceMappings(
-      state.mappingsByDevice,
-      deviceId
-    );
-    const mapping = deviceMappings[sensorKey];
-    if (!mapping) return;
-
     if (target.type === "checkbox") {
+      const deviceMappings = DeviceMidiMappingEngine.ensureDeviceMappings(
+        state.mappingsByDevice,
+        deviceId
+      );
+      const mapping = deviceMappings[sensorKey];
+      if (!mapping) return;
+
       mapping[field] = !!target.checked;
 
       // Enabling/disabling a mapping changes which rows are visible, so rebuild this card.
@@ -555,23 +574,95 @@
           rebuildDeviceCardMappings(card, deviceId);
         }
       }
-    } else if (target.type === "number" || target.type === "text") {
-      const val = target.value;
-      const num = Number(val);
-      if (field === "channel") {
-        mapping[field] = Math.min(16, Math.max(1, isNaN(num) ? 1 : num));
-      } else if (field === "durationMs") {
-        mapping[field] = Math.min(2000, Math.max(10, isNaN(num) ? 200 : num));
-      } else {
-        mapping[field] = isNaN(num) ? 0 : num;
-      }
+      persistState();
+      return;
     }
 
-    persistState();
+    if (target.type === "number" || target.type === "text") {
+      const val = target.value;
+      const num = Number(val);
+      if (field === "channel" || field === "ccNumber" || field === "noteNumber") {
+        scheduleDelayedFieldUpdate(deviceId, sensorKey, field, num);
+      } else if (field === "durationMs") {
+        const deviceMappings = DeviceMidiMappingEngine.ensureDeviceMappings(
+          state.mappingsByDevice,
+          deviceId
+        );
+        const mapping = deviceMappings[sensorKey];
+        if (!mapping) return;
+        mapping[field] = Math.min(2000, Math.max(10, isNaN(num) ? 200 : num));
+        persistState();
+      } else {
+        const deviceMappings = DeviceMidiMappingEngine.ensureDeviceMappings(
+          state.mappingsByDevice,
+          deviceId
+        );
+        const mapping = deviceMappings[sensorKey];
+        if (!mapping) return;
+        mapping[field] = isNaN(num) ? 0 : num;
+        persistState();
+      }
+      return;
+    }
+  }
+
+  function scheduleDelayedFieldUpdate(deviceId, sensorKey, field, rawValue) {
+    if (!pendingFieldTimers[deviceId]) {
+      pendingFieldTimers[deviceId] = Object.create(null);
+    }
+    const key = `${sensorKey}:${field}`;
+    const existing = pendingFieldTimers[deviceId][key];
+    if (existing && existing.timerId) {
+      clearTimeout(existing.timerId);
+    }
+
+    const value = Number(rawValue);
+    const timerId = window.setTimeout(() => {
+      const deviceMappings = DeviceMidiMappingEngine.ensureDeviceMappings(
+        state.mappingsByDevice,
+        deviceId
+      );
+      const mapping = deviceMappings[sensorKey];
+      if (!mapping) return;
+
+      if (field === "channel") {
+        const num = Number.isFinite(value) ? value : 1;
+        mapping[field] = Math.min(16, Math.max(1, num));
+      } else {
+        const num = Number.isFinite(value) ? value : 0;
+        mapping[field] = Math.min(127, Math.max(0, num));
+      }
+
+      persistState();
+      pendingFieldTimers[deviceId][key] = null;
+    }, 1000);
+
+    pendingFieldTimers[deviceId][key] = { timerId, value };
   }
 
   function handleAddMappingClick(event) {
     const target = event.target;
+    if (target.classList.contains("mapping-remove-btn")) {
+      const deviceId = target.dataset.deviceId;
+      const sensorKey = target.dataset.sensorKey;
+      if (!deviceId || !sensorKey) return;
+
+      const deviceMappings = DeviceMidiMappingEngine.ensureDeviceMappings(
+        state.mappingsByDevice,
+        deviceId
+      );
+      const mapping = deviceMappings[sensorKey];
+      if (!mapping) return;
+
+      mapping.enabled = false;
+      persistState();
+      const card = deviceCards[deviceId];
+      if (card) {
+        rebuildDeviceCardMappings(card, deviceId);
+      }
+      return;
+    }
+
     if (!target.classList.contains("mapping-add-btn")) return;
 
     const deviceId = target.dataset.deviceId;
