@@ -5,7 +5,11 @@
 (function () {
   const runtimeByDevice = new Map();
 
-  const SENSOR_KEYS = ["ax", "ay", "az", "magnitude", "tap"];
+  const Sensors = window.DeviceMidiSensors || null;
+  const SENSOR_KEYS =
+    (Sensors &&
+      Array.isArray(Sensors.SENSOR_KEYS) &&
+      Sensors.SENSOR_KEYS.slice()) || ["ax", "ay", "az", "magnitude", "tap"];
 
   function getOrCreateRuntime(deviceId) {
     let rt = runtimeByDevice.get(deviceId);
@@ -34,6 +38,9 @@
   }
 
   function createDefaultMappingForSensor(sensorKey) {
+    if (Sensors && typeof Sensors.createDefaultMappingForSensor === "function") {
+      return Sensors.createDefaultMappingForSensor(sensorKey);
+    }
     const base = {
       enabled: false,
       sensorKey,
