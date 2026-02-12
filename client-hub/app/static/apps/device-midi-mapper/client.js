@@ -25,6 +25,11 @@
     selectedOutputId: null,
   };
 
+  // Keep a stable mapping from deviceId -> DOM node so we only update
+  // the affected elements instead of re-rendering the whole container.
+  const deviceCards = Object.create(null);
+  let emptyStateEl = null;
+
   function init() {
     // Restore from local storage
     const stored = window.DeviceMidiStorage && window.DeviceMidiStorage.loadState();
@@ -253,35 +258,84 @@
   }
 
   function renderDevices() {
-    if (!devicesContainer || !state.deviceManager) return;
-    const devicesMap = state.deviceManager.getAllDevices();
-    const items = [];
-    if (devicesMap && devicesMap.size) {
-      // Any non-empty device map indicates we recently received frames
-      state.lastUpdateTs = Date.now();
-      devicesMap.forEach((device, id) => {
-        const data = device.getSensorData();
-        const card = renderDeviceCard(String(id), data);
-        items.push(card);
+    if (!devicesContainer) return;
+
+    const manager = state.deviceManager;
+    const devicesMap = manager && manager.getAllDevices ? manager.getAllDevices() : null;
+
+    if (!manager || !devicesMap || !devicesMap.size) {
+      // No active devices: clear individual cards but keep the container itself intact.
+      state.lastUpdateTs = null;
+
+      Object.keys(deviceCards).forEach((id) => {
+        const card = deviceCards[id];
+        if (card && card.parentNode === devicesContainer) {
+          devicesContainer.removeChild(card);
+        }
+        delete deviceCards[id];
       });
-    }
-    devicesContainer.innerHTML = "";
-    if (!items.length) {
-      const empty = document.createElement("div");
-      empty.className = "empty-state";
-      empty.textContent = "No active devices. Connect and move a device to see it here.";
-      devicesContainer.appendChild(empty);
+
+      if (!emptyStateEl) {
+        emptyStateEl = document.createElement("div");
+        emptyStateEl.className = "empty-state";
+        emptyStateEl.textContent =
+          "No active devices. Connect and move a device to see it here.";
+      }
+      if (!emptyStateEl.parentNode) {
+        devicesContainer.appendChild(emptyStateEl);
+      }
       return;
     }
-    items.forEach((el) => devicesContainer.appendChild(el));
+
+    // We have at least one device frame.
+    state.lastUpdateTs = Date.now();
+
+    if (emptyStateEl && emptyStateEl.parentNode === devicesContainer) {
+      devicesContainer.removeChild(emptyStateEl);
+    }
+
+    const seenIds = new Set();
+    devicesMap.forEach((device, id) => {
+      const deviceId = String(id);
+      seenIds.add(deviceId);
+      const data = device.getSensorData();
+
+      let card = deviceCards[deviceId];
+      if (!card) {
+        card = renderDeviceCard(deviceId, data);
+        deviceCards[deviceId] = card;
+        devicesContainer.appendChild(card);
+      } else {
+        updateDeviceCardLive(card, deviceId, data);
+      }
+    });
+
+    // Remove cards for devices that disappeared.
+    Object.keys(deviceCards).forEach((id) => {
+      if (!seenIds.has(id)) {
+        const card = deviceCards[id];
+        if (card && card.parentNode === devicesContainer) {
+          devicesContainer.removeChild(card);
+        }
+        delete deviceCards[id];
+      }
+    });
   }
 
   function renderDeviceCard(deviceId, sensorData) {
     const tpl = deviceTemplate;
     const node = tpl.content.firstElementChild.cloneNode(true);
+    // Single delegated listeners per card; rows can be rebuilt safely.
+    node.addEventListener("change", handleMappingChange);
+    node.addEventListener("click", handleAddMappingClick);
+    updateDeviceCardMeta(node, deviceId, sensorData);
+    rebuildDeviceCardMappings(node, deviceId);
+    return node;
+  }
+
+  function updateDeviceCardMeta(node, deviceId, sensorData) {
     const idEl = node.querySelector(".device-id");
     const metaEl = node.querySelector(".device-meta");
-    const tbody = node.querySelector("tbody");
 
     if (idEl) idEl.textContent = `Device ${deviceId}`;
     if (metaEl) {
@@ -292,6 +346,14 @@
         0
       )} tap:${sensorData && sensorData.tap ? "yes" : "no"}`;
     }
+  }
+
+  function rebuildDeviceCardMappings(node, deviceId) {
+    const tbody = node.querySelector("tbody");
+    if (!tbody) return;
+
+    // Rebuild only this device's table body structure.
+    tbody.innerHTML = "";
 
     const deviceMappings = DeviceMidiMappingEngine.ensureDeviceMappings(
       state.mappingsByDevice,
@@ -319,6 +381,9 @@
     enabledRows.forEach((row) => {
       const mapping = deviceMappings[row.key];
       const tr = document.createElement("tr");
+
+      tr.dataset.deviceId = deviceId;
+      tr.dataset.sensorKey = row.key;
 
       const nameTd = document.createElement("td");
       nameTd.textContent = row.label;
@@ -402,6 +467,7 @@
       const valueTd = document.createElement("td");
       const lastValue =
         DeviceMidiMappingEngine.getLastValue(deviceId, row.key);
+      valueTd.className = "mapping-value";
       valueTd.textContent =
         lastValue === null || typeof lastValue === "undefined"
           ? "—"
@@ -443,12 +509,26 @@
       addTr.appendChild(addTd);
       tbody.appendChild(addTr);
     }
+  }
 
-    // Attach listeners after building the rows
-    node.addEventListener("change", handleMappingChange);
-    node.addEventListener("click", handleAddMappingClick);
+  function updateDeviceCardLive(node, deviceId, sensorData) {
+    updateDeviceCardMeta(node, deviceId, sensorData);
 
-    return node;
+    const tbody = node.querySelector("tbody");
+    if (!tbody) return;
+
+    const rows = tbody.querySelectorAll("tr[data-sensor-key]");
+    rows.forEach((tr) => {
+      const key = tr.dataset.sensorKey;
+      if (!key) return;
+      const valueTd = tr.querySelector(".mapping-value");
+      if (!valueTd) return;
+      const lastValue = DeviceMidiMappingEngine.getLastValue(deviceId, key);
+      valueTd.textContent =
+        lastValue === null || typeof lastValue === "undefined"
+          ? "—"
+          : String(Math.round(lastValue));
+    });
   }
 
   function handleMappingChange(event) {
@@ -467,6 +547,14 @@
 
     if (target.type === "checkbox") {
       mapping[field] = !!target.checked;
+
+      // Enabling/disabling a mapping changes which rows are visible, so rebuild this card.
+      if (field === "enabled") {
+        const card = deviceCards[deviceId];
+        if (card) {
+          rebuildDeviceCardMappings(card, deviceId);
+        }
+      }
     } else if (target.type === "number" || target.type === "text") {
       const val = target.value;
       const num = Number(val);
@@ -507,8 +595,11 @@
 
     mapping.enabled = true;
     persistState();
-    // Re-render all devices so the new mapping row appears
-    renderDevices();
+    // Rebuild just this device's mappings so the new row appears
+    const card = deviceCards[deviceId];
+    if (card) {
+      rebuildDeviceCardMappings(card, deviceId);
+    }
   }
 
   document.addEventListener("DOMContentLoaded", init);
