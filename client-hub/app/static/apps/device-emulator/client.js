@@ -82,8 +82,8 @@ function updateCubeFromAccelerometer() {
     const axG = gravityG.x;
     const ayG = gravityG.y;
     const azG = gravityG.z;
-    rotX = Math.atan2(-ayG, Math.sqrt((axG * axG) + (azG * azG)));
-    rotY = Math.atan2(axG, Math.sqrt((ayG * ayG) + (azG * azG)));
+    rotX = -Math.atan2(-ayG, Math.sqrt((axG * axG) + (azG * azG)));
+    rotY = -Math.atan2(axG, Math.sqrt((ayG * ayG) + (azG * azG)));
     rotZ = 0;
 }
 
