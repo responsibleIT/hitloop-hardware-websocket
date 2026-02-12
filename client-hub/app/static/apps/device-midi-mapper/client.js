@@ -32,6 +32,7 @@
   const deviceCards = Object.create(null);
   let emptyStateEl = null;
   const pendingFieldTimers = Object.create(null);
+  const soloSnapshots = Object.create(null);
 
   function init() {
     // Restore from local storage
@@ -398,6 +399,16 @@
       nameTd.textContent = row.label;
       tr.appendChild(nameTd);
 
+      const soloTd = document.createElement("td");
+      const soloInput = document.createElement("input");
+      soloInput.type = "checkbox";
+      soloInput.checked = !!mapping.solo;
+      soloInput.dataset.deviceId = deviceId;
+      soloInput.dataset.sensorKey = row.key;
+      soloInput.dataset.field = "solo";
+      soloTd.appendChild(soloInput);
+      tr.appendChild(soloTd);
+
       const channelTd = document.createElement("td");
       const channelInput = document.createElement("input");
       channelInput.type = "number";
@@ -434,8 +445,6 @@
       } else {
         const out0Input = document.createElement("input");
         out0Input.type = "number";
-        out0Input.min = "0";
-        out0Input.max = "127";
         out0Input.value =
           typeof mapping.outputMin === "number" ? mapping.outputMin : 0;
         out0Input.dataset.deviceId = deviceId;
@@ -451,8 +460,6 @@
       } else {
         const out255Input = document.createElement("input");
         out255Input.type = "number";
-        out255Input.min = "0";
-        out255Input.max = "127";
         out255Input.value =
           typeof mapping.outputMax === "number" ? mapping.outputMax : 127;
         out255Input.dataset.deviceId = deviceId;
@@ -524,7 +531,7 @@
     if (availableRows.length > 0) {
       const addTr = document.createElement("tr");
       const addTd = document.createElement("td");
-      addTd.colSpan = 9;
+      addTd.colSpan = 10;
 
       const labelSpan = document.createElement("span");
       labelSpan.textContent = "Add mapping:";
@@ -581,6 +588,59 @@
     const field = target.dataset.field;
     if (!deviceId || !sensorKey || !field) return;
 
+    if (target.type === "checkbox" && field === "solo") {
+      const deviceMappings = DeviceMidiMappingEngine.ensureDeviceMappings(
+        state.mappingsByDevice,
+        deviceId
+      );
+      const current = deviceMappings[sensorKey];
+      if (!current) return;
+
+      if (target.checked) {
+        // Solo ON: snapshot current enabled state then activate only this mapping.
+        const snapshot = Object.create(null);
+        Object.keys(deviceMappings).forEach((key) => {
+          const m = deviceMappings[key];
+          if (!m) return;
+          snapshot[key] = !!m.enabled;
+        });
+        soloSnapshots[deviceId] = snapshot;
+
+        Object.keys(deviceMappings).forEach((key) => {
+          const m = deviceMappings[key];
+          if (!m) return;
+          if (key === sensorKey) {
+            m.enabled = true;
+            m.solo = true;
+          } else {
+            m.enabled = false;
+            m.solo = false;
+          }
+        });
+      } else {
+        // Solo OFF: restore previous enabled states if we have a snapshot.
+        const snapshot = soloSnapshots[deviceId];
+        if (snapshot) {
+          Object.keys(deviceMappings).forEach((key) => {
+            const m = deviceMappings[key];
+            if (!m) return;
+            m.enabled = !!snapshot[key];
+            m.solo = false;
+          });
+          soloSnapshots[deviceId] = null;
+        } else {
+          current.solo = false;
+        }
+      }
+
+      persistState();
+      const card = deviceCards[deviceId];
+      if (card) {
+        rebuildDeviceCardMappings(card, deviceId);
+      }
+      return;
+    }
+
     if (target.type === "number" || target.type === "text") {
       const val = target.value;
       const num = Number(val);
@@ -603,8 +663,14 @@
         const mapping = deviceMappings[sensorKey];
         if (!mapping) return;
         const safe = isNaN(num) ? 0 : num;
-        // Generic clamp for value-like fields such as outputMin/outputMax/velocity.
-        mapping[field] = Math.min(127, Math.max(0, safe));
+        // For mapping endpoints we allow values outside 0..127;
+        // they will be clamped later when sending actual MIDI.
+        if (field === "outputMin" || field === "outputMax") {
+          mapping[field] = safe;
+        } else {
+          // Generic clamp for other value-like fields such as velocity.
+          mapping[field] = Math.min(127, Math.max(0, safe));
+        }
         persistState();
       }
       return;
