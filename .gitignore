@@ -24,3 +24,6 @@ htmlcov/
 .vscode/
 .idea/
 *.swp
+
+lib/
+idf-anchor/
