@@ -82,6 +82,9 @@
     if (wsUrlInput && !wsUrlInput.value) wsUrlInput.value = defaultWsUrl;
 
     let manager = null;
+    const deviceStateStore = Object.create(null);
+    // Expose for debugging and for the Strudel-side helper.
+    window.deviceStateStore = deviceStateStore;
     let renderQueued = false;
     let fieldsEnabled = new Set(DEFAULT_FIELDS.map((f) => f.key));
     let lastActiveVarNames = new Set();
@@ -128,26 +131,39 @@
     }
 
     function scheduleAutoEvaluate() {
-      if (!autoEvalToggle?.checked) return;
-      if (!isPlaying()) return;
+      // In device-signal mode, we no longer re-evaluate the whole script on every frame.
+      // The Strudel-side helper reads from deviceStateStore during playback instead.
+      return;
+    }
 
-      // Debounce + rate limit: keep audio stable, but update quickly.
-      const now = Date.now();
-      const minGapMs = 120;
-      const dueIn = Math.max(0, minGapMs - (now - lastEvalAt));
+    function installDeviceSignalPrelude() {
+      if (!replEl || !replEl.editor || !replEl.editor.repl) return false;
+      if (replEl.__deviceSignalInstalled) return true;
 
-      if (autoEvalDebounceTimer) return;
-      autoEvalDebounceTimer = setTimeout(async () => {
-        autoEvalDebounceTimer = null;
-        try {
-          // While playing, evaluate without autostart to avoid restarting transport.
-          await replEl?.editor?.evaluate(false);
-          lastEvalAt = Date.now();
-          setFooter(`auto-evaluated @ ${new Date(lastEvalAt).toLocaleTimeString()}`);
-        } catch (e) {
-          setFooter(`auto-eval error: ${String(e?.message || e)}`);
-        }
-      }, dueIn);
+      const helperSource = `
+const deviceSignal = (deviceId, field, opts = {}) => {
+  const id = String(deviceId || '').slice(0, 4).toLowerCase();
+  const key = String(field || '');
+  const defaults = { min: 0, max: 1, defaultValue: 0 };
+  const { min, max, defaultValue } = Object.assign({}, defaults, opts);
+  const scale = max - min;
+  return pure(({ span }) => {
+    const store = window.deviceStateStore || {};
+    const d = store[id];
+    let raw = d && typeof d[key] === 'number' && Number.isFinite(d[key]) ? d[key] : defaultValue * 255;
+    const norm = raw / 255;
+    return min + norm * scale;
+  });
+};
+`.trim();
+
+      try {
+        replEl.editor.repl.evaluate(helperSource, false);
+        replEl.__deviceSignalInstalled = true;
+        return true;
+      } catch (_e) {
+        return false;
+      }
     }
 
     function setGlobalsAndCollectEntries() {
@@ -165,20 +181,31 @@
         return { entries };
       }
 
-      for (const [deviceId, device] of manager.getAllDevices()) {
+      for (const [rawDeviceId, device] of manager.getAllDevices()) {
+        const deviceIdHex = String(rawDeviceId || "").slice(0, 4).toLowerCase();
         const data = device.getSensorData();
+
+        if (!deviceStateStore[deviceIdHex]) {
+          deviceStateStore[deviceIdHex] = { updatedAt: 0 };
+        }
+        const storeEntry = deviceStateStore[deviceIdHex];
+
         for (const fieldKey of fieldsEnabled) {
-          const name = varNameFor(deviceId, fieldKey);
+          const name = varNameFor(deviceIdHex, fieldKey);
           const value = normalizeFieldValue(fieldKey, data);
           activeNow.add(name);
 
           // Expose as direct global.
           window[name] = value;
 
+          // Keep centralized device state in sync for the Strudel helper.
+          storeEntry[fieldKey] = value;
+          storeEntry.updatedAt = Date.now();
+
           entries.push({
             name,
             value,
-            deviceId: String(deviceId).slice(0, 4).toUpperCase(),
+            deviceId: String(deviceIdHex).slice(0, 4).toUpperCase(),
             fieldKey,
           });
         }
@@ -213,9 +240,9 @@
         return a.fieldKey.localeCompare(b.fieldKey);
       });
 
-      varsList.innerHTML = "";
-
+      // When disconnected, just show a static hint.
       if (!manager) {
+        varsList.innerHTML = "";
         const empty = document.createElement("div");
         empty.className = "hint";
         empty.textContent = "Connect to the WebSocket server to see variables.";
@@ -223,7 +250,9 @@
         return;
       }
 
+      // When no variables match, show a static hint.
       if (filtered.length === 0) {
+        varsList.innerHTML = "";
         const empty = document.createElement("div");
         empty.className = "hint";
         empty.textContent = filter
@@ -233,7 +262,36 @@
         return;
       }
 
+      // Incrementally update rows instead of rebuilding the whole list.
+      const existingRowsByName = new Map();
+      for (const row of varsList.querySelectorAll(".var")) {
+        const nameEl = row.querySelector(".var__name");
+        const valueEl = row.querySelector(".var__value");
+        if (!nameEl || !valueEl) continue;
+        const name = nameEl.textContent || "";
+        existingRowsByName.set(name, { row, valueEl });
+      }
+
+      const seenNames = new Set();
+
       for (const item of filtered) {
+        const nameKey = item.name;
+        seenNames.add(nameKey);
+        const existing = existingRowsByName.get(nameKey);
+
+        if (existing) {
+          // Update value only when it actually changed.
+          const nextText =
+            typeof item.value === "boolean" ? String(item.value) : String(item.value ?? "—");
+          if (existing.valueEl.textContent !== nextText) {
+            existing.valueEl.textContent = nextText;
+          }
+          // Keep DOM order in sync with sorted order.
+          varsList.appendChild(existing.row);
+          continue;
+        }
+
+        // Create row once for new variables.
         const row = document.createElement("div");
         row.className = "var";
         row.title = "Click to copy. Shift-click to insert at cursor.";
@@ -248,18 +306,25 @@
           setFooter(`copied: ${item.name}`);
         });
 
-        const name = document.createElement("div");
-        name.className = "var__name";
-        name.textContent = item.name;
+        const nameEl = document.createElement("div");
+        nameEl.className = "var__name";
+        nameEl.textContent = item.name;
 
-        const value = document.createElement("div");
-        value.className = "var__value";
-        value.textContent =
+        const valueEl = document.createElement("div");
+        valueEl.className = "var__value";
+        valueEl.textContent =
           typeof item.value === "boolean" ? String(item.value) : String(item.value ?? "—");
 
-        row.appendChild(name);
-        row.appendChild(value);
+        row.appendChild(nameEl);
+        row.appendChild(valueEl);
         varsList.appendChild(row);
+      }
+
+      // Remove rows for variables that are no longer present.
+      for (const [name, info] of existingRowsByName) {
+        if (!seenNames.has(name) && info.row.parentElement === varsList) {
+          varsList.removeChild(info.row);
+        }
       }
     }
 
@@ -358,6 +423,13 @@
     // Wire UI
     renderFieldChips();
     scheduleRender();
+
+    // Install the Strudel-side deviceSignal helper once the REPL is ready.
+    const helperInterval = setInterval(() => {
+      if (installDeviceSignalPrelude()) {
+        clearInterval(helperInterval);
+      }
+    }, 200);
 
     connectBtn?.addEventListener("click", connect);
     disconnectBtn?.addEventListener("click", disconnect);
