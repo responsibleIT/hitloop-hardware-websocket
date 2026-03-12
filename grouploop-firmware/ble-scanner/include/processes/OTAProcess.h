@@ -39,7 +39,9 @@ private:
         }
 
         httpUpdate.rebootOnUpdate(true);
+#ifdef LED_BUILTIN
         httpUpdate.setLedPin(LED_BUILTIN, LOW);
+#endif
 
         t_httpUpdate_return result;
 
