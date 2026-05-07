@@ -353,6 +353,189 @@ private:
     unsigned long lastUpdateTime; // Last update time for delta calculation
 };
 
+// 6. IndividualLedBehavior - Control each of 6 LEDs independently
+class IndividualLedBehavior : public LedBehavior {
+private:
+    enum PatternMode {
+        PATTERN_SOLID,
+        PATTERN_BREATHING,
+        PATTERN_HEARTBEAT
+    };
+
+    struct LedState {
+        bool isOn;
+        uint32_t color;
+        uint8_t brightness;
+    };
+    LedState ledStates[6];  // State for each of 6 LEDs
+    PatternMode patternMode;
+    uint32_t breathingDurationMs;
+    unsigned long heartbeatIntervalMs;
+
+public:
+    IndividualLedBehavior() : LedBehavior("Individual") {
+        setTimerInterval(20); // 50Hz
+        patternMode = PATTERN_SOLID;
+        breathingDurationMs = 2000;
+        heartbeatIntervalMs = 2000;
+        // Initialize all LEDs as off
+        for (int i = 0; i < 6; i++) {
+            ledStates[i] = {false, 0x000000, 255};
+        }
+    }
+
+    void setup(Adafruit_NeoPixel& pixels) override {
+        LedBehavior::setup(pixels);
+        updateTimer.reset();
+        this->pixels->clear();
+        this->pixels->show();
+    }
+
+    void update() override {
+        if (!updateTimer.checkAndReset()) return;
+
+        uint8_t frameBrightness = computeFrameBrightness();
+
+        // Render each LED according to its individual state
+        for (int i = 0; i < 6; i++) {
+            if (ledStates[i].isOn) {
+                uint16_t combined = ((uint16_t)ledStates[i].brightness * (uint16_t)frameBrightness) / 255;
+                uint32_t scaledColor = scaleColor(ledStates[i].color, (uint8_t)combined);
+                pixels->setPixelColor(i, scaledColor);
+            } else {
+                pixels->setPixelColor(i, 0);  // Off
+            }
+        }
+        pixels->show();
+    }
+
+    void reset() override {
+        LedBehavior::reset();
+        patternMode = PATTERN_SOLID;
+        // Reset all LEDs to off
+        for (int i = 0; i < 6; i++) {
+            ledStates[i] = {false, 0x000000, 255};
+        }
+        pixels->clear();
+        pixels->show();
+    }
+
+    // Set individual LED state
+    void setLedOn(int index, uint32_t color, uint8_t brightness = 255) {
+        if (index >= 0 && index < 6) {
+            ledStates[index] = {true, color, brightness};
+        }
+    }
+
+    // Turn off individual LED
+    void setLedOff(int index) {
+        if (index >= 0 && index < 6) {
+            ledStates[index] = {false, 0x000000, 255};
+        }
+    }
+
+    // Turn off all LEDs
+    void clearAll() {
+        for (int i = 0; i < 6; i++) {
+            ledStates[i] = {false, 0x000000, 255};
+        }
+        if (pixels) {
+            pixels->clear();
+            pixels->show();
+        }
+    }
+
+    void setPatternSolid() {
+        patternMode = PATTERN_SOLID;
+    }
+
+    void setPatternBreathing(uint32_t durationMs = 2000) {
+        patternMode = PATTERN_BREATHING;
+        breathingDurationMs = durationMs;
+    }
+
+    void setPatternHeartBeat(unsigned long intervalMs = 2000) {
+        patternMode = PATTERN_HEARTBEAT;
+        heartbeatIntervalMs = intervalMs;
+    }
+
+    // Get current state of a specific LED
+    bool isLedOn(int index) const {
+        if (index >= 0 && index < 6) {
+            return ledStates[index].isOn;
+        }
+        return false;
+    }
+
+    // Get current color of a specific LED
+    uint32_t getLedColor(int index) const {
+        if (index >= 0 && index < 6) {
+            return ledStates[index].color;
+        }
+        return 0;
+    }
+
+private:
+    uint8_t computeFrameBrightness() {
+        switch (patternMode) {
+            case PATTERN_BREATHING: {
+                if (breathingDurationMs == 0) return 255;
+                float sine_wave = sin(updateTimer.elapsed() * 2.0 * PI / breathingDurationMs);
+                return (uint8_t)(((sine_wave + 1.0) / 2.0) * 255.0);
+            }
+            case PATTERN_HEARTBEAT:
+                return computeHeartBeatBrightness(updateTimer.elapsed());
+            case PATTERN_SOLID:
+            default:
+                return 255;
+        }
+    }
+
+    uint8_t computeHeartBeatBrightness(unsigned long elapsedMs) {
+        if (heartbeatIntervalMs == 0) return 255;
+
+        // Match HeartBeatBehavior timing shape for synchronized per-LED pulsing.
+        const unsigned long cycle = heartbeatIntervalMs;
+        const unsigned long fadeIn1 = 60;
+        const unsigned long fadeOut1 = 150;
+        const unsigned long pause = 100;
+        const unsigned long fadeIn2 = 60;
+        const unsigned long fadeOut2 = 400;
+        const unsigned long active = fadeIn1 + fadeOut1 + pause + fadeIn2 + fadeOut2;
+        if (active >= cycle) {
+            return 255;
+        }
+        const unsigned long idle = cycle - active;
+
+        unsigned long t = elapsedMs % cycle;
+        if (t < idle) {
+            return 0;
+        }
+        t -= idle;
+
+        if (t < fadeIn1) {
+            return (uint8_t)((t * 255UL) / fadeIn1);
+        }
+        t -= fadeIn1;
+        if (t < fadeOut1) {
+            return (uint8_t)(255UL - ((t * 255UL) / fadeOut1));
+        }
+        t -= fadeOut1;
+        if (t < pause) {
+            return 0;
+        }
+        t -= pause;
+        if (t < fadeIn2) {
+            return (uint8_t)((t * 255UL) / fadeIn2);
+        }
+        t -= fadeIn2;
+        if (t < fadeOut2) {
+            return (uint8_t)(255UL - ((t * 255UL) / fadeOut2));
+        }
+        return 0;
+    }
+};
+
 // --- Global LED Behavior Instances ---
 // These instances are available globally to any file that includes LedBehaviors.h
 
@@ -363,5 +546,6 @@ extern BreathingBehavior ledsBreathing;
 extern HeartBeatBehavior ledsHeartBeat;
 extern CycleBehavior ledsCycle;
 extern SpringBehavior ledsSpring;
+extern IndividualLedBehavior ledsIndividual;
 
 #endif // LED_BEHAVIORS_H 

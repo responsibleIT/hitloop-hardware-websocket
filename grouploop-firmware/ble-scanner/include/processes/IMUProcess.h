@@ -38,8 +38,8 @@ public:
         // It's often safe to call Wire.begin() multiple times.
         Wire.begin(); 
         
-        // The begin function returns a status, 0 on success
-        if (sensor.begin() != 0) {
+        // SparkFun library returns true on success.
+        if (sensor.begin()) {
             Serial.println("IMU sensor initialized successfully.");
             sensorOk = true;
             sensor.setMode(LIS2DH12_NM_10bit);

@@ -10,4 +10,5 @@ BreathingBehavior ledsBreathing(0xFFFFFF, 2000);
 HeartBeatBehavior ledsHeartBeat;
 CycleBehavior ledsCycle(0x000000, 100);
 SpringBehavior ledsSpring(0xFFFFFF); // Green spring with default parameters
+IndividualLedBehavior ledsIndividual; // Individual LED control
 

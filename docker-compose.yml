@@ -10,8 +10,8 @@ services:
     build:
       context: ./client-hub
       dockerfile: Dockerfile
-#    ports:
-#      - "5004:5000" # Unified Flask client hub
+    ports:
+     - "5004:5000" # Unified Flask client hub
     labels:
       caddy: ${CLIENT_HUB_DOMAIN}
       caddy.reverse_proxy: "{{upstreams 5000}}"
@@ -56,4 +56,5 @@ services:
 networks:
   proxy:
     external: true
+    name: hitloop-hardware-websocket_proxy
 

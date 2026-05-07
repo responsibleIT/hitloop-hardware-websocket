@@ -1,8 +1,11 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+    />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>Device Emulator</title>
@@ -10,11 +13,23 @@
     <script src="/static/vendor/js/p5.min.js"></script>
     <script src="/config.js"></script>
     <script>
-      window.DEFAULT_WS_URL = (window.APP_CONFIG && window.APP_CONFIG.wsDefaultUrl) || "ws://localhost:5003/";
+      window.DEFAULT_WS_URL =
+        (window.APP_CONFIG && window.APP_CONFIG.wsDefaultUrl) ||
+        "ws://localhost:5003/";
+      // Allow overriding via query param: ?ws=ws://...
+      const params = new URLSearchParams(window.location.search);
+      const wsParam = params.get("ws");
+      if (wsParam) {
+        window.DEFAULT_WS_URL = wsParam;
+      }
     </script>
   </head>
   <body>
     <div class="wrap">
+      <div class="controls">
+        <span id="status">Loading...</span>
+        <div id="ledIndicators" class="led-indicators"></div>
+      </div>
       <div id="canvasWrap"></div>
     </div>
     <script src="./client.js"></script>

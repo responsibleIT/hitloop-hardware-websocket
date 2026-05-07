@@ -30,6 +30,10 @@ def _default_commands():
             "reset":        {"parameters": [],           "description": "Reset device"},
             "status":       {"parameters": [],           "description": "Get device status"},
             "ota":          {"parameters": ["url"],      "description": "OTA firmware update from URL"},
+            "led_set":      {"parameters": ["index", "color"], "description": "Set individual LED on (index 0-5, color hex)"},
+            "led_off":      {"parameters": ["index"],    "description": "Turn off individual LED (index 0-5)"},
+            "led_all_off":  {"parameters": [],           "description": "Turn all 6 LEDs off"},
+            "led_get_state":{"parameters": [],           "description": "Get state of all LEDs (debug)"},
         }
     }
 

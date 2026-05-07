@@ -129,26 +129,25 @@ void loop() {
   BLEProcess* bleProcess = static_cast<BLEProcess*>(processManager.getProcess("ble"));
   LedProcess* ledProcess = static_cast<LedProcess*>(processManager.getProcess("led"));
   
-  if (wifiProcess && bleProcess) {
+ if (wifiProcess && bleProcess) {
     if (wifiProcess->isWiFiConnected() && !bleProcess->isProcessRunning()) {
       Serial.println("WiFi connected - starting BLE process");
       processManager.startProcess("ble");
       
-      // Change LED to random non-red color when WiFi connects
-      if (ledProcess) {
+      // Change LED to random non-red color when WiFi connects (unless in individual LED mode)
+      if (ledProcess && ledProcess->currentBehavior != &ledsIndividual) {
         ledProcess->changeToRandomColor();
       }
     } else if (!wifiProcess->isWiFiConnected() && bleProcess->isProcessRunning()) {
       Serial.println("WiFi disconnected - halting BLE process");
       processManager.haltProcess("ble");
       
-      // Change LED back to red breathing when WiFi disconnects
-      if (ledProcess) {
+      // Change LED back to red breathing when WiFi disconnects (unless in individual LED mode)
+      if (ledProcess && ledProcess->currentBehavior != &ledsIndividual) {
         ledProcess->setToRedBreathing();
       }
     }
   }
-  
   
   // Update the shared WebSocket connection
   webSocketManager.update();

@@ -93,7 +93,23 @@ private:
             if (params.length() == 0) return;             
             // Try to parse as hex color
             unsigned long color = strtoul(params.c_str(), NULL, 16);
-            currentBehavior->setColor(color);
+
+            // If we are in individual mode, exit to a global mode so legacy
+            // led/pattern flows from device-control keep working.
+            if (currentBehavior == &ledsIndividual) {
+                setBehavior(&ledsSolid);
+            }
+
+            // Keep global behaviors in sync with the latest chosen color.
+            ledsSolid.setColor(color);
+            ledsBreathing.setColor(color);
+            ledsHeartBeat.setColor(color);
+            ledsCycle.setColor(color);
+            ledsSpring.setColor(color);
+
+            if (currentBehavior) {
+                currentBehavior->setColor(color);
+            }
             Serial.print("Set LED color to: ");
             Serial.println(params);
         
@@ -102,16 +118,31 @@ private:
         // Register pattern command
         commandRegistry.registerCommand("pattern", [this](const String& params) {
             if (params == "breathing") {
-                setBehavior(&ledsBreathing);
-                Serial.println("Set LED pattern to breathing");
+                if (currentBehavior == &ledsIndividual) {
+                    ledsIndividual.setPatternBreathing();
+                    Serial.println("Set individual LED pattern to breathing");
+                } else {
+                    setBehavior(&ledsBreathing);
+                    Serial.println("Set LED pattern to breathing");
+                }
             }
             else if (params == "heartbeat") {
-                setBehavior(&ledsHeartBeat);
-                Serial.println("Set LED pattern to heartbeat");
+                if (currentBehavior == &ledsIndividual) {
+                    ledsIndividual.setPatternHeartBeat();
+                    Serial.println("Set individual LED pattern to heartbeat");
+                } else {
+                    setBehavior(&ledsHeartBeat);
+                    Serial.println("Set LED pattern to heartbeat");
+                }
             }
             else if (params == "solid") {
-                setBehavior(&ledsSolid);
-                Serial.println("Set LED pattern to solid");
+                if (currentBehavior == &ledsIndividual) {
+                    ledsIndividual.setPatternSolid();
+                    Serial.println("Set individual LED pattern to solid");
+                } else {
+                    setBehavior(&ledsSolid);
+                    Serial.println("Set LED pattern to solid");
+                }
             }
             else if (params == "cycle") {
                 setBehavior(&ledsCycle);
@@ -183,6 +214,85 @@ private:
                 Serial.println(mass, 1);
             } else {
                 Serial.println("spring_param requires 6 hex characters (e.g., AA100D)");
+            }
+        });
+
+        // Register led_set command - Set individual LED on with color
+        // Format: led_set:<index>:<color_hex>
+        // Example: led_set:0:ff0000 (LED 0, red)
+        commandRegistry.registerCommand("led_set", [this](const String& params) {
+            // Switch to individual LED behavior
+            setBehavior(&ledsIndividual);
+            
+            // Parse params: index:color
+            int colonIndex = params.indexOf(':');
+            if (colonIndex <= 0 || colonIndex >= params.length() - 1) {
+                Serial.println("led_set format: <index>:<color_hex>");
+                return;
+            }
+            
+            int index = params.substring(0, colonIndex).toInt();
+            String colorStr = params.substring(colonIndex + 1);
+            unsigned long color = strtoul(colorStr.c_str(), NULL, 16);
+            
+            if (index >= 0 && index < 6) {
+                ledsIndividual.setLedOn(index, color);
+                Serial.print("Set LED ");
+                Serial.print(index);
+                Serial.print(" to color 0x");
+                Serial.println(colorStr);
+            } else {
+                Serial.print("LED index out of range: ");
+                Serial.println(index);
+            }
+        });
+
+        // Register led_off command - Turn off individual LED
+        // Format: led_off:<index>
+        // Example: led_off:0 (turn off LED 0)
+        commandRegistry.registerCommand("led_off", [this](const String& params) {
+            // Switch to individual LED behavior if not already
+            if (currentBehavior != &ledsIndividual) {
+                setBehavior(&ledsIndividual);
+            }
+            
+            int index = params.toInt();
+            if (index >= 0 && index < 6) {
+                ledsIndividual.setLedOff(index);
+                Serial.print("Turned off LED ");
+                Serial.println(index);
+            } else {
+                Serial.print("LED index out of range: ");
+                Serial.println(index);
+            }
+        });
+
+        // Register led_all_off command - Turn off all LEDs
+        commandRegistry.registerCommand("led_all_off", [this](const String& params) {
+            // Switch to individual LED behavior
+            setBehavior(&ledsIndividual);
+            ledsIndividual.clearAll();
+            Serial.println("Turned off all LEDs");
+        });
+
+        // Register led_get_state command - Get state of all LEDs (for debugging)
+        commandRegistry.registerCommand("led_get_state", [this](const String& params) {
+            Serial.println("LED States:");
+            if (currentBehavior == &ledsIndividual) {
+                for (int i = 0; i < 6; i++) {
+                    Serial.print("  LED ");
+                    Serial.print(i);
+                    Serial.print(": ");
+                    if (ledsIndividual.isLedOn(i)) {
+                        Serial.print("ON  color=0x");
+                        Serial.println(ledsIndividual.getLedColor(i), HEX);
+                    } else {
+                        Serial.println("OFF");
+                    }
+                }
+            } else {
+                Serial.print("Current behavior: ");
+                Serial.println(currentBehavior->type);
             }
         });
     }

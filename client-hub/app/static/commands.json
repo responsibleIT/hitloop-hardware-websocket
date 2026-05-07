@@ -1,12 +1,80 @@
 {
   "commands": {
-    "led":          { "parameters": ["color"],    "description": "Set LED color (hex RGB)" },
-    "pattern":      { "parameters": ["id"],       "description": "Set LED pattern" },
-    "brightness":   { "parameters": ["value"],    "description": "Set LED brightness (0-255)" },
-    "spring_param": { "parameters": ["params"],   "description": "Set spring parameters (6 hex chars)" },
-    "vibrate":      { "parameters": ["duration"], "description": "Vibrate device (ms)" },
-    "reset":        { "parameters": [],           "description": "Reset device" },
-    "status":       { "parameters": [],           "description": "Get device status" },
-    "ota":          { "parameters": ["url"],      "description": "OTA firmware update from URL" }
+    "led": {
+      "handler": "led",
+      "parameters": [
+        "color"
+      ],
+      "description": "Set LED color (hex string)"
+    },
+    "vibrate": {
+      "handler": "vibrate",
+      "parameters": [
+        "duration"
+      ],
+      "description": "Vibrate device for given duration (ms)"
+    },
+    "pattern": {
+      "handler": "pattern",
+      "parameters": [
+        "name"
+      ],
+      "description": "Set LED pattern (breathing, heartbeat, cycle, spring, off)"
+    },
+    "brightness": {
+      "handler": "brightness",
+      "parameters": [
+        "value"
+      ],
+      "description": "Set LED brightness (0-255)"
+    },
+    "spring_param": {
+      "handler": "spring_param",
+      "parameters": [
+        "params"
+      ],
+      "description": "Set spring parameters (6 hex characters)"
+    },
+    "reset": {
+      "handler": "reset",
+      "parameters": [],
+      "description": "Reset LED pattern"
+    },
+    "status": {
+      "handler": "status",
+      "parameters": [],
+      "description": "Get device status"
+    },
+    "led_set": {
+      "handler": "led_set",
+      "parameters": [
+        "index",
+        "color"
+      ],
+      "description": "Set individual LED on with color (format: index:color_hex)"
+    },
+    "led_off": {
+      "handler": "led_off",
+      "parameters": [
+        "index"
+      ],
+      "description": "Turn off individual LED"
+    },
+    "led_all_off": {
+      "handler": "led_all_off",
+      "parameters": [],
+      "description": "Turn off all LEDs"
+    },
+    "led_get_state": {
+      "handler": "led_get_state",
+      "parameters": [],
+      "description": "Get state of all LEDs (debug)"
+    },
+    "ota": {
+      "parameters": [
+        "url"
+      ],
+      "description": "OTA firmware update from URL"
+    }
   }
 }
