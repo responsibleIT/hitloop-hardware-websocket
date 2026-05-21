@@ -479,7 +479,6 @@
     }
 
     $("toggleScriptsBtn")?.addEventListener("click", () => toggleScriptsPanel());
-    $("closeScriptsBtn")?.addEventListener("click", () => toggleScriptsPanel(false));
 
     $("saveScriptBtn")?.addEventListener("click", () => {
       const code = getStrudelContent(replEl);

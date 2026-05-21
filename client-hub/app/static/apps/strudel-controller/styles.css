@@ -214,17 +214,56 @@ body {
   min-height: 0;
 }
 
-/* Scripts panel — collapsible, on the right */
+/* Scripts panel — pull-tab on left, content slides in from right */
 .panel--scripts {
-  width: 280px;
+  flex-direction: row; /* override .panel's column */
   flex-shrink: 0;
-  transition: width 0.2s ease, opacity 0.15s ease, border-color 0.2s ease;
+  width: 36px; /* collapsed: just the tab */
+  transition: width 0.2s ease;
 }
 
-.panel--scripts.hidden {
-  width: 0;
+.panel--scripts:not(.hidden) {
+  width: 280px;
+}
+
+.panel__pull-tab {
+  flex-shrink: 0;
+  width: 36px;
+  align-self: stretch;
+  background: none;
+  border: none;
+  border-left: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  order: 1; /* sits on the left edge (panel is LTR: tab first, body second) */
+  transition: color 0.15s, background 0.15s;
+}
+
+.panel__pull-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.panel--scripts:not(.hidden) .panel__pull-tab {
+  border-right: 1px solid var(--border);
+  border-left: none;
+  order: -1; /* move to far left when panel is open */
+}
+
+.panel__scripts-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: opacity 0.15s ease;
+}
+
+.panel--scripts.hidden .panel__scripts-body {
   opacity: 0;
-  border-color: transparent;
   pointer-events: none;
 }
 
