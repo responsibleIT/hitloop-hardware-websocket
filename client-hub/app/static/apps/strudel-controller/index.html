@@ -18,6 +18,13 @@
   <body>
     <header class="topbar">
       <div class="topbar__left">
+        <button id="toggleScriptsBtn" class="btn btn--icon" title="Saved scripts">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+            <rect x="2" y="7" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+            <rect x="2" y="11" width="8" height="1.5" rx="0.75" fill="currentColor"/>
+          </svg>
+        </button>
         <div class="brand">
           <div class="brand__title">Strudel Controller</div>
           <div class="brand__subtitle">Device sensors → MIDI CC ch1 → Strudel</div>
@@ -43,6 +50,28 @@
     </header>
 
     <main class="layout">
+      <aside class="panel panel--scripts hidden" id="scriptsPanel">
+        <div class="panel__header">
+          <div class="panel__title">Scripts</div>
+          <button id="closeScriptsBtn" class="btn btn--icon" title="Close">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <line x1="1" y1="1" x2="11" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="11" y1="1" x2="1" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="panel__controls">
+          <div class="field field--stack">
+            <label class="field__label" for="scriptNameInput">Name</label>
+            <input id="scriptNameInput" class="field__input" type="text" placeholder="My script…" />
+          </div>
+          <button id="saveScriptBtn" class="btn btn--primary">Save current script</button>
+        </div>
+        <div class="script-list" id="scriptList">
+          <div class="hint">No saved scripts yet.</div>
+        </div>
+      </aside>
+
       <aside class="panel panel--left">
         <div class="panel__header">
           <div class="panel__title">Devices</div>

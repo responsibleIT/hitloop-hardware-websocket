@@ -43,6 +43,52 @@
     return true;
   }
 
+  function setStrudelContent(replEl, text) {
+    if (!replEl || !replEl.editor || !replEl.editor.editor) return false;
+    const view = replEl.editor.editor;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
+    view.focus();
+    return true;
+  }
+
+  function getStrudelContent(replEl) {
+    try {
+      return replEl?.editor?.editor?.state?.doc?.toString() ?? null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // --- Script storage ---
+
+  const SCRIPTS_KEY = "strudelController.scripts.v1";
+
+  function loadScripts() {
+    try {
+      return JSON.parse(localStorage.getItem(SCRIPTS_KEY) || "[]");
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function persistScripts(scripts) {
+    localStorage.setItem(SCRIPTS_KEY, JSON.stringify(scripts));
+  }
+
+  function saveScript(name, code) {
+    const scripts = loadScripts();
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    scripts.unshift({ id, name: name || "Untitled", code, savedAt: new Date().toISOString() });
+    persistScripts(scripts);
+    return scripts;
+  }
+
+  function deleteScript(id) {
+    const scripts = loadScripts().filter((s) => s.id !== id);
+    persistScripts(scripts);
+    return scripts;
+  }
+
   document.addEventListener("DOMContentLoaded", async () => {
     const wsUrlInput = $("wsUrl");
     const connectBtn = $("connectBtn");
@@ -51,6 +97,9 @@
     const devicesList = $("devicesList");
     const replEl = $("repl");
     const editorWrap = document.querySelector(".editorWrap");
+    const scriptsPanel = $("scriptsPanel");
+    const scriptList = $("scriptList");
+    const scriptNameInput = $("scriptNameInput");
 
     const defaultWsUrl =
       (window.APP_CONFIG && window.APP_CONFIG.wsDefaultUrl) || "ws://localhost:5003/";
@@ -362,6 +411,88 @@
         else setFooter("Could not insert — click into the editor first to set cursor position.");
       });
     }
+
+    // --- Scripts panel ---
+
+    function renderScriptsList() {
+      if (!scriptList) return;
+      const scripts = loadScripts();
+
+      if (scripts.length === 0) {
+        scriptList.innerHTML = '<div class="hint">No saved scripts yet.</div>';
+        return;
+      }
+
+      scriptList.innerHTML = "";
+      for (const script of scripts) {
+        const item = document.createElement("div");
+        item.className = "script-item";
+
+        const nameRow = document.createElement("div");
+        nameRow.className = "script-item__name-row";
+
+        const nameEl = document.createElement("span");
+        nameEl.className = "script-item__name";
+        nameEl.textContent = script.name;
+
+        const actions = document.createElement("div");
+        actions.className = "script-item__actions";
+
+        const loadBtn = document.createElement("button");
+        loadBtn.className = "btn btn--xs";
+        loadBtn.textContent = "Load";
+        loadBtn.addEventListener("click", () => {
+          const ok = setStrudelContent(replEl, script.code);
+          if (ok) setFooter(`loaded: ${script.name}`);
+          else setFooter("Could not load — editor not ready.");
+        });
+
+        const delBtn = document.createElement("button");
+        delBtn.className = "btn btn--xs btn--danger-outline";
+        delBtn.title = "Delete";
+        delBtn.textContent = "×";
+        delBtn.addEventListener("click", () => {
+          deleteScript(script.id);
+          renderScriptsList();
+        });
+
+        actions.appendChild(loadBtn);
+        actions.appendChild(delBtn);
+        nameRow.appendChild(nameEl);
+        nameRow.appendChild(actions);
+
+        const preview = document.createElement("pre");
+        preview.className = "script-item__preview";
+        const lines = script.code.split("\n").slice(0, 3).join("\n");
+        preview.textContent = lines + (script.code.split("\n").length > 3 ? "\n…" : "");
+
+        item.appendChild(nameRow);
+        item.appendChild(preview);
+        scriptList.appendChild(item);
+      }
+    }
+
+    function toggleScriptsPanel(force) {
+      const hidden = force !== undefined ? !force : scriptsPanel.classList.contains("hidden");
+      scriptsPanel.classList.toggle("hidden", !hidden);
+      if (hidden) renderScriptsList();
+    }
+
+    $("toggleScriptsBtn")?.addEventListener("click", () => toggleScriptsPanel());
+    $("closeScriptsBtn")?.addEventListener("click", () => toggleScriptsPanel(false));
+
+    $("saveScriptBtn")?.addEventListener("click", () => {
+      const code = getStrudelContent(replEl);
+      if (code === null) {
+        setFooter("Editor not ready — cannot save.");
+        return;
+      }
+      const name = scriptNameInput?.value.trim() || "Untitled";
+      saveScript(name, code);
+      if (scriptNameInput) scriptNameInput.value = "";
+      renderScriptsList();
+      setFooter(`saved: ${name}`);
+    });
 
     // --- Wire up ---
 
