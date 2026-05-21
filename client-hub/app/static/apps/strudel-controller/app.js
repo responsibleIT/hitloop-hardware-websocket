@@ -100,6 +100,8 @@
     const scriptsPanel = $("scriptsPanel");
     const scriptList = $("scriptList");
     const scriptNameInput = $("scriptNameInput");
+    const consoleMessages = $("consoleMessages");
+    const consoleBadge = $("consoleBadge");
 
     const defaultWsUrl =
       (window.APP_CONFIG && window.APP_CONFIG.wsDefaultUrl) || "ws://localhost:5003/";
@@ -145,19 +147,17 @@
       return slotMap.get(deviceId) * 3 + 1;
     }
 
-    // --- MIDI CC loop (RAF) ---
+    // --- MIDI CC loop (50ms = 20/s, stable even when tab is backgrounded) ---
 
     function mappingLoop() {
-      if (manager) {
-        for (const [id, device] of manager.getAllDevices()) {
-          const base = getCCBase(id);
-          const data = device.getSensorData();
-          DeviceMidi.sendControlChange(base,     Math.round((data.ax ?? 0) / 2), 1);
-          DeviceMidi.sendControlChange(base + 1, Math.round((data.ay ?? 0) / 2), 1);
-          DeviceMidi.sendControlChange(base + 2, Math.round((data.az ?? 0) / 2), 1);
-        }
+      if (!manager) return;
+      for (const [id, device] of manager.getAllDevices()) {
+        const base = getCCBase(id);
+        const data = device.getSensorData();
+        DeviceMidi.sendControlChange(base,     Math.round((data.ax ?? 0) / 2), 1);
+        DeviceMidi.sendControlChange(base + 1, Math.round((data.ay ?? 0) / 2), 1);
+        DeviceMidi.sendControlChange(base + 2, Math.round((data.az ?? 0) / 2), 1);
       }
-      requestAnimationFrame(mappingLoop);
     }
 
     // --- Device card rendering ---
@@ -493,6 +493,69 @@
       setFooter(`saved: ${name}`);
     });
 
+    // --- Console panel ---
+
+    let consoleErrorCount = 0;
+
+    function formatConsoleArg(arg) {
+      if (arg instanceof Error) return arg.message;
+      if (typeof arg === "object" && arg !== null) {
+        try { return JSON.stringify(arg); } catch (_) { return String(arg); }
+      }
+      return String(arg ?? "");
+    }
+
+    function addConsoleMessage(level, args) {
+      if (!consoleMessages) return;
+      const time = new Date().toLocaleTimeString("en", { hour12: false });
+      const text = args.map(formatConsoleArg).filter(Boolean).join(" ");
+      if (!text) return;
+
+      const row = document.createElement("div");
+      row.className = `console-msg console-msg--${level}`;
+
+      const timeEl = document.createElement("span");
+      timeEl.className = "console-msg__time";
+      timeEl.textContent = time;
+
+      const textEl = document.createElement("span");
+      textEl.className = "console-msg__text";
+      textEl.textContent = text;
+
+      row.appendChild(timeEl);
+      row.appendChild(textEl);
+      consoleMessages.appendChild(row);
+      consoleMessages.scrollTop = consoleMessages.scrollHeight;
+
+      if (level === "error") {
+        consoleErrorCount++;
+        if (consoleBadge) {
+          consoleBadge.textContent = consoleErrorCount;
+          consoleBadge.hidden = false;
+        }
+      }
+    }
+
+    function clearConsole() {
+      if (consoleMessages) consoleMessages.innerHTML = "";
+      consoleErrorCount = 0;
+      if (consoleBadge) consoleBadge.hidden = true;
+    }
+
+    // Intercept console.error and console.warn
+    const _origError = console.error.bind(console);
+    console.error = (...args) => { _origError(...args); addConsoleMessage("error", args); };
+
+    const _origWarn = console.warn.bind(console);
+    console.warn = (...args) => { _origWarn(...args); addConsoleMessage("warn", args); };
+
+    window.addEventListener("unhandledrejection", (ev) => {
+      const msg = ev.reason?.message || String(ev.reason);
+      addConsoleMessage("error", [`Unhandled rejection: ${msg}`]);
+    });
+
+    $("clearConsoleBtn")?.addEventListener("click", clearConsole);
+
     // --- Wire up ---
 
     midiSelect?.addEventListener("change", () => {
@@ -513,7 +576,7 @@
     // Start
     await initMidi();
     scheduleRender();
-    requestAnimationFrame(mappingLoop);
+    setInterval(mappingLoop, 50);            // 20/s, works when tab is backgrounded
     setInterval(updateConnectionStatusLoop, 250);
     setInterval(scheduleRender, 1000);
   });
