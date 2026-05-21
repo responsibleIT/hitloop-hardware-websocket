@@ -150,10 +150,10 @@
     // --- MIDI CC loop (50ms = 20/s, stable even when tab is backgrounded) ---
 
     // Maps raw 0–255 accelerometer byte to CC 0–127.
-    // Sensor convention: 0g = 128, −1g = 64, +1g = 192  (±2g fills 0–255).
-    // Desired: −1g → 0, 0g → 64, +1g → 127, clamped.
+    // Sensor: 0g = 128, ±1g = ±64 raw units (±2g fills 0–255).
+    // −1g (raw 64) → 0, 0g (raw 128) → 64, +1g (raw 191) → 127, clamped.
     function axisToCC(raw) {
-      return Math.min(127, Math.max(0, Math.round((raw - 64) * 127 / 128)));
+      return Math.min(127, Math.max(0, raw - 64));
     }
 
     function mappingLoop() {
@@ -170,7 +170,7 @@
     // --- Device card rendering ---
 
     function snippetFor(ccNumber) {
-      return `cc(${ccNumber}).midichan(1)`;
+      return `cc(${ccNumber})`;
     }
 
     function createDeviceCard(deviceId, idUpper, base) {
@@ -254,8 +254,8 @@
     function updateDeviceCardValues(card, data) {
       for (const axis of AXES) {
         const rawVal = data[axis.key] ?? 0;
-        const ccVal = Math.round(rawVal / 2);
-        const pct = Math.round((rawVal / 255) * 100);
+        const ccVal = axisToCC(rawVal);
+        const pct = Math.round((ccVal / 127) * 100);
 
         const fill = card.querySelector(`.axis-row__fill[data-axis="${axis.key}"]`);
         const valueEl = card.querySelector(`.axis-row__value[data-axis="${axis.key}"]`);
