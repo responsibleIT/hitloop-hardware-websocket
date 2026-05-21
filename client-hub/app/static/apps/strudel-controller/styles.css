@@ -214,9 +214,9 @@ body {
   min-height: 0;
 }
 
-/* Scripts panel — collapsible */
+/* Scripts panel — collapsible, on the right */
 .panel--scripts {
-  width: 240px;
+  width: 280px;
   flex-shrink: 0;
   transition: width 0.2s ease, opacity 0.15s ease, border-color 0.2s ease;
 }
@@ -226,6 +226,14 @@ body {
   opacity: 0;
   border-color: transparent;
   pointer-events: none;
+}
+
+.panel--scripts .field__input {
+  width: 100%;
+}
+
+.btn--full {
+  width: 100%;
 }
 
 /* Devices panel — fixed width */
