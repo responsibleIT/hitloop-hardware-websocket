@@ -57,8 +57,8 @@
     if (wsUrlInput && !wsUrlInput.value) wsUrlInput.value = defaultWsUrl;
 
     let manager = null;
-    const channelMap = new Map(); // deviceId → MIDI channel (1–16)
-    let nextChannel = 1;
+    const slotMap = new Map(); // deviceId → slot index (0-based); CC base = slot * 3 + 1
+    let nextSlot = 0;
     let renderQueued = false;
     let dragSnippet = null;
 
@@ -85,14 +85,15 @@
       }
     }
 
-    // --- Channel assignment ---
+    // --- CC slot assignment (all on channel 1) ---
+    // Each device gets 3 consecutive CC numbers: base, base+1, base+2
+    // Device slot 0 → CC1/CC2/CC3, slot 1 → CC4/CC5/CC6, etc.
 
-    function getChannel(deviceId) {
-      if (!channelMap.has(deviceId)) {
-        if (channelMap.size >= 16) return null;
-        channelMap.set(deviceId, nextChannel++);
+    function getCCBase(deviceId) {
+      if (!slotMap.has(deviceId)) {
+        slotMap.set(deviceId, nextSlot++);
       }
-      return channelMap.get(deviceId);
+      return slotMap.get(deviceId) * 3 + 1;
     }
 
     // --- MIDI CC loop (RAF) ---
@@ -100,12 +101,11 @@
     function mappingLoop() {
       if (manager) {
         for (const [id, device] of manager.getAllDevices()) {
-          const ch = getChannel(id);
-          if (!ch) continue;
+          const base = getCCBase(id);
           const data = device.getSensorData();
-          DeviceMidi.sendControlChange(1, Math.round((data.ax ?? 0) / 2), ch);
-          DeviceMidi.sendControlChange(2, Math.round((data.ay ?? 0) / 2), ch);
-          DeviceMidi.sendControlChange(3, Math.round((data.az ?? 0) / 2), ch);
+          DeviceMidi.sendControlChange(base,     Math.round((data.ax ?? 0) / 2), 1);
+          DeviceMidi.sendControlChange(base + 1, Math.round((data.ay ?? 0) / 2), 1);
+          DeviceMidi.sendControlChange(base + 2, Math.round((data.az ?? 0) / 2), 1);
         }
       }
       requestAnimationFrame(mappingLoop);
@@ -113,11 +113,11 @@
 
     // --- Device card rendering ---
 
-    function snippetFor(cc, ch) {
-      return ch ? `cc(${cc}).midichan(${ch})` : `cc(${cc})`;
+    function snippetFor(ccNumber) {
+      return `cc(${ccNumber}).midichan(1)`;
     }
 
-    function createDeviceCard(deviceId, idUpper, ch) {
+    function createDeviceCard(deviceId, idUpper, base) {
       const card = document.createElement("div");
       card.className = "device-card";
       card.dataset.deviceId = String(deviceId);
@@ -131,7 +131,7 @@
 
       const chEl = document.createElement("span");
       chEl.className = "device-card__channel";
-      chEl.textContent = ch ? `ch ${ch}` : "—";
+      chEl.textContent = `CC${base}–CC${base + 2}`;
 
       header.appendChild(idEl);
       header.appendChild(chEl);
@@ -140,8 +140,9 @@
       const axesEl = document.createElement("div");
       axesEl.className = "device-card__axes";
 
-      for (const axis of AXES) {
-        const snippet = snippetFor(axis.cc, ch);
+      for (let i = 0; i < AXES.length; i++) {
+        const axis = AXES[i];
+        const snippet = snippetFor(base + i);
         const row = document.createElement("div");
         row.className = "axis-row";
         row.draggable = true;
@@ -229,14 +230,14 @@
       }
 
       for (const [id, device] of devices) {
-        const ch = getChannel(id);
+        const base = getCCBase(id);
         const data = device.getSensorData();
         const idUpper = String(id).slice(0, 4).toUpperCase();
         const idStr = String(id);
 
         let card = devicesList.querySelector(`.device-card[data-device-id="${idStr}"]`);
         if (!card) {
-          card = createDeviceCard(id, idUpper, ch);
+          card = createDeviceCard(id, idUpper, base);
           devicesList.appendChild(card);
         }
         updateDeviceCardValues(card, data);
@@ -262,8 +263,8 @@
       const originalPrune = mgr.pruneInactive.bind(mgr);
       mgr.pruneInactive = () => {
         originalPrune();
-        for (const id of [...channelMap.keys()]) {
-          if (!mgr.getDevice(id)) channelMap.delete(id);
+        for (const id of [...slotMap.keys()]) {
+          if (!mgr.getDevice(id)) slotMap.delete(id);
         }
         scheduleRender();
       };

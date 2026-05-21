@@ -20,7 +20,7 @@
       <div class="topbar__left">
         <div class="brand">
           <div class="brand__title">Strudel Controller</div>
-          <div class="brand__subtitle">Device sensors → MIDI CC → Strudel</div>
+          <div class="brand__subtitle">Device sensors → MIDI CC ch1 → Strudel</div>
         </div>
       </div>
 
@@ -76,12 +76,13 @@
         <div class="editorWrap">
           <strudel-editor id="repl">
             <!--
-// Each device sends aX=CC1, aY=CC2, aZ=CC3 on its assigned MIDI channel.
+// All devices send on MIDI channel 1. Each device gets 3 CC numbers.
+// 1st device: aX=CC1, aY=CC2, aZ=CC3
+// 2nd device: aX=CC4, aY=CC5, aZ=CC6  (etc.)
 // Drag a snippet from the left panel to insert it here.
 // setcpm(120)
 // $: s("bd sd").gain(0.9)
 //
-// // Use device axes (device on ch 1):
 // // $: s("hh*8").lpf(cc(2).midichan(1).range(200, 8000))
 // // $: s("bd sd").gain(cc(1).midichan(1).range(0.4, 1.2))
             -->
