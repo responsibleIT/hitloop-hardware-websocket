@@ -149,14 +149,21 @@
 
     // --- MIDI CC loop (50ms = 20/s, stable even when tab is backgrounded) ---
 
+    // Maps raw 0–255 accelerometer byte to CC 0–127.
+    // Sensor convention: 0g = 128, −1g = 64, +1g = 192  (±2g fills 0–255).
+    // Desired: −1g → 0, 0g → 64, +1g → 127, clamped.
+    function axisToCC(raw) {
+      return Math.min(127, Math.max(0, Math.round((raw - 64) * 127 / 128)));
+    }
+
     function mappingLoop() {
       if (!manager) return;
       for (const [id, device] of manager.getAllDevices()) {
         const base = getCCBase(id);
         const data = device.getSensorData();
-        DeviceMidi.sendControlChange(base,     Math.round((data.ax ?? 0) / 2), 1);
-        DeviceMidi.sendControlChange(base + 1, Math.round((data.ay ?? 0) / 2), 1);
-        DeviceMidi.sendControlChange(base + 2, Math.round((data.az ?? 0) / 2), 1);
+        DeviceMidi.sendControlChange(base,     axisToCC(data.ax ?? 128), 1);
+        DeviceMidi.sendControlChange(base + 1, axisToCC(data.ay ?? 128), 1);
+        DeviceMidi.sendControlChange(base + 2, axisToCC(data.az ?? 128), 1);
       }
     }
 
