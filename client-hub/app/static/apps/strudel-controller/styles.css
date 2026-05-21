@@ -93,6 +93,20 @@ body {
   color: rgba(255, 255, 255, 0.38);
 }
 
+.field__select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.5)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.field__select option {
+  background: #1a2540;
+  color: var(--text);
+}
+
 .buttons {
   display: flex;
   gap: 8px;
@@ -153,7 +167,7 @@ body {
 .layout {
   height: calc(100% - 64px);
   display: grid;
-  grid-template-columns: 380px 1fr;
+  grid-template-columns: 320px 1fr;
   gap: 12px;
   padding: 12px;
 }
@@ -203,37 +217,14 @@ body {
   width: 100%;
 }
 
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.05);
-  cursor: pointer;
-  user-select: none;
-  font-size: 12px;
-  color: var(--text);
-}
-
-.chip[aria-pressed="true"] {
-  border-color: rgba(79, 140, 255, 0.65);
-  background: rgba(79, 140, 255, 0.18);
-}
-
 .hint {
   font-size: 12px;
   color: var(--muted);
 }
 
-.vars {
+/* Device list */
+
+.devices {
   overflow: auto;
   padding: 10px;
   display: grid;
@@ -241,37 +232,109 @@ body {
   align-content: start;
 }
 
-.var {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
+/* Device card */
+
+.device-card {
+  border: 1px solid var(--border);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
   background: rgba(0, 0, 0, 0.18);
-  cursor: pointer;
+  overflow: hidden;
 }
 
-.var:hover {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.24);
+.device-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border);
 }
 
-.var__name {
+.device-card__id {
   font-family: var(--mono);
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.90);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.device-card__channel {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--primary);
+  background: rgba(79, 140, 255, 0.12);
+  border: 1px solid rgba(79, 140, 255, 0.30);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.device-card__axes {
+  padding: 4px 0;
+}
+
+/* Axis row — draggable */
+
+.axis-row {
+  display: grid;
+  grid-template-columns: 26px 1fr 52px 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  cursor: grab;
+  border-radius: 6px;
+  margin: 1px 4px;
+  transition: background 0.1s;
+  user-select: none;
+}
+
+.axis-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.axis-row:active {
+  cursor: grabbing;
+}
+
+.axis-row__label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.axis-row__snippet {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: rgba(79, 140, 255, 0.9);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  background: rgba(79, 140, 255, 0.08);
+  border-radius: 4px;
+  padding: 2px 5px;
 }
 
-.var__value {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--muted);
+.axis-row__bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
 }
+
+.axis-row__fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: width 0.08s linear;
+}
+
+.axis-row__value {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* Strudel panel */
 
 .panel__actions {
   display: flex;
@@ -279,32 +342,25 @@ body {
   gap: 10px;
 }
 
-.toggle {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 12px;
-  color: var(--muted);
-  user-select: none;
-}
-
-.toggle input {
-  accent-color: var(--primary);
-}
-
 .editorWrap {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  border-radius: 0 0 16px 0;
+  transition: outline 0.1s, box-shadow 0.1s;
 }
 
-/* The Strudel web component creates its own container next to the element.
-   We give the element a "slot" area; the actual editor container is inserted after it. */
+.editorWrap.drop-active {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 2px rgba(79, 140, 255, 0.15);
+}
+
+/* The Strudel web component creates its own container next to the element. */
 strudel-editor {
   display: none;
 }
 
-/* Ensure the inserted StrudelMirror root fills the right panel. */
 .editorWrap > div {
   height: 100%;
   min-height: 0;
@@ -336,4 +392,3 @@ strudel-editor {
     width: 240px;
   }
 }
-

@@ -1,15 +1,10 @@
-/* global HitloopDeviceManager */
+/* global HitloopDeviceManager, DeviceMidi */
 
 (() => {
-  const DEFAULT_FIELDS = [
-    { key: "aX", label: "aX" },
-    { key: "aY", label: "aY" },
-    { key: "aZ", label: "aZ" },
-    { key: "dNW", label: "dNW" },
-    { key: "dNE", label: "dNE" },
-    { key: "dSE", label: "dSE" },
-    { key: "dSW", label: "dSW" },
-    { key: "tap", label: "tap" },
+  const AXES = [
+    { key: "ax", label: "aX", cc: 1 },
+    { key: "ay", label: "aY", cc: 2 },
+    { key: "az", label: "aZ", cc: 3 },
   ];
 
   function $(id) {
@@ -32,20 +27,6 @@
     else dot.style.background = "rgba(255,255,255,0.25)";
   }
 
-  function normalizeFieldValue(fieldKey, sensorData) {
-    // sensorData fields are: ax, ay, az, dNW, dNE, dSE, dSW, tap
-    if (!sensorData) return undefined;
-    if (fieldKey === "aX") return sensorData.ax;
-    if (fieldKey === "aY") return sensorData.ay;
-    if (fieldKey === "aZ") return sensorData.az;
-    return sensorData[fieldKey];
-  }
-
-  function varNameFor(deviceIdHex, fieldKey) {
-    const idUpper = String(deviceIdHex || "").slice(0, 4).toUpperCase();
-    return `device_${idUpper}_${fieldKey}`;
-  }
-
   function safeClipboardWrite(text) {
     if (!text) return;
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -57,312 +38,247 @@
     if (!replEl || !replEl.editor || !replEl.editor.editor) return false;
     const view = replEl.editor.editor;
     const sel = view.state.selection.main;
-    const from = sel.from;
-    const to = sel.to;
-    view.dispatch({ changes: { from, to, insert: text } });
+    view.dispatch({ changes: { from: sel.from, to: sel.to, insert: text } });
     view.focus();
     return true;
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("DOMContentLoaded", async () => {
     const wsUrlInput = $("wsUrl");
     const connectBtn = $("connectBtn");
     const disconnectBtn = $("disconnectBtn");
-    const deviceCountEl = $("deviceCount");
-    const filterInput = $("filterInput");
-    const varsList = $("varsList");
-    const fieldChips = $("fieldChips");
-    const autoEvalToggle = $("autoEvalToggle");
-    const evalBtn = $("evalBtn");
-    const stopBtn = $("stopBtn");
+    const midiSelect = $("midiSelect");
+    const devicesList = $("devicesList");
     const replEl = $("repl");
+    const editorWrap = document.querySelector(".editorWrap");
 
     const defaultWsUrl =
       (window.APP_CONFIG && window.APP_CONFIG.wsDefaultUrl) || "ws://localhost:5003/";
     if (wsUrlInput && !wsUrlInput.value) wsUrlInput.value = defaultWsUrl;
 
     let manager = null;
-    const deviceStateStore = Object.create(null);
-    // Expose for debugging and for the Strudel-side helper.
-    window.deviceStateStore = deviceStateStore;
+    const channelMap = new Map(); // deviceId → MIDI channel (1–16)
+    let nextChannel = 1;
     let renderQueued = false;
-    let fieldsEnabled = new Set(DEFAULT_FIELDS.map((f) => f.key));
-    let lastActiveVarNames = new Set();
-    let autoEvalDebounceTimer = null;
-    let lastEvalAt = 0;
+    let dragSnippet = null;
 
-    function getFilterText() {
-      return String(filterInput?.value || "")
-        .trim()
-        .toLowerCase();
+    // --- MIDI ---
+
+    async function initMidi() {
+      await DeviceMidi.enableIfNeeded();
+      populateMidiSelect();
     }
 
-    function updateDeviceCount() {
-      const count = manager ? manager.getDeviceCount() : 0;
-      if (deviceCountEl) deviceCountEl.textContent = `devices: ${count}`;
-    }
-
-    function renderFieldChips() {
-      if (!fieldChips) return;
-      fieldChips.innerHTML = "";
-
-      for (const f of DEFAULT_FIELDS) {
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "chip";
-        chip.setAttribute("aria-pressed", fieldsEnabled.has(f.key) ? "true" : "false");
-        chip.textContent = f.label;
-        chip.addEventListener("click", () => {
-          if (fieldsEnabled.has(f.key)) fieldsEnabled.delete(f.key);
-          else fieldsEnabled.add(f.key);
-          renderFieldChips();
-          scheduleRender();
-        });
-        fieldChips.appendChild(chip);
+    function populateMidiSelect() {
+      if (!midiSelect) return;
+      const outputs = DeviceMidi.listOutputs();
+      midiSelect.innerHTML = '<option value="">— select MIDI output —</option>';
+      for (const o of outputs) {
+        const opt = document.createElement("option");
+        opt.value = o.id;
+        opt.textContent = o.name;
+        midiSelect.appendChild(opt);
+      }
+      const savedId = DeviceMidi.getSelectedOutputId();
+      if (savedId && outputs.some((o) => o.id === savedId)) {
+        midiSelect.value = savedId;
       }
     }
 
-    function isPlaying() {
-      try {
-        return Boolean(replEl?.editor?.repl?.scheduler?.started);
-      } catch (_e) {
-        return false;
+    // --- Channel assignment ---
+
+    function getChannel(deviceId) {
+      if (!channelMap.has(deviceId)) {
+        if (channelMap.size >= 16) return null;
+        channelMap.set(deviceId, nextChannel++);
       }
+      return channelMap.get(deviceId);
     }
 
-    function scheduleAutoEvaluate() {
-      // In device-signal mode, we no longer re-evaluate the whole script on every frame.
-      // The Strudel-side helper reads from deviceStateStore during playback instead.
-      return;
-    }
+    // --- MIDI CC loop (RAF) ---
 
-    function installDeviceSignalPrelude() {
-      if (!replEl || !replEl.editor || !replEl.editor.repl) return false;
-      if (replEl.__deviceSignalInstalled) return true;
-
-      const helperSource = `
-const deviceSignal = (deviceId, field, opts = {}) => {
-  const id = String(deviceId || '').slice(0, 4).toLowerCase();
-  const key = String(field || '');
-  const defaults = { min: 0, max: 1, defaultValue: 0 };
-  const { min, max, defaultValue } = Object.assign({}, defaults, opts);
-  const scale = max - min;
-  return pure(({ span }) => {
-    const store = window.deviceStateStore || {};
-    const d = store[id];
-    let raw = d && typeof d[key] === 'number' && Number.isFinite(d[key]) ? d[key] : defaultValue * 255;
-    const norm = raw / 255;
-    return min + norm * scale;
-  });
-};
-`.trim();
-
-      try {
-        replEl.editor.repl.evaluate(helperSource, false);
-        replEl.__deviceSignalInstalled = true;
-        return true;
-      } catch (_e) {
-        return false;
-      }
-    }
-
-    function setGlobalsAndCollectEntries() {
-      const entries = [];
-      const activeNow = new Set();
-
-      if (!manager) {
-        // Clear globals if disconnected
-        for (const name of lastActiveVarNames) {
-          try {
-            delete window[name];
-          } catch (_e) {}
-        }
-        lastActiveVarNames = new Set();
-        return { entries };
-      }
-
-      for (const [rawDeviceId, device] of manager.getAllDevices()) {
-        const deviceIdHex = String(rawDeviceId || "").slice(0, 4).toLowerCase();
-        const data = device.getSensorData();
-
-        if (!deviceStateStore[deviceIdHex]) {
-          deviceStateStore[deviceIdHex] = { updatedAt: 0 };
-        }
-        const storeEntry = deviceStateStore[deviceIdHex];
-
-        for (const fieldKey of fieldsEnabled) {
-          const name = varNameFor(deviceIdHex, fieldKey);
-          const value = normalizeFieldValue(fieldKey, data);
-          activeNow.add(name);
-
-          // Expose as direct global.
-          window[name] = value;
-
-          // Keep centralized device state in sync for the Strudel helper.
-          storeEntry[fieldKey] = value;
-          storeEntry.updatedAt = Date.now();
-
-          entries.push({
-            name,
-            value,
-            deviceId: String(deviceIdHex).slice(0, 4).toUpperCase(),
-            fieldKey,
-          });
+    function mappingLoop() {
+      if (manager) {
+        for (const [id, device] of manager.getAllDevices()) {
+          const ch = getChannel(id);
+          if (!ch) continue;
+          const data = device.getSensorData();
+          DeviceMidi.sendControlChange(1, Math.round((data.ax ?? 0) / 2), ch);
+          DeviceMidi.sendControlChange(2, Math.round((data.ay ?? 0) / 2), ch);
+          DeviceMidi.sendControlChange(3, Math.round((data.az ?? 0) / 2), ch);
         }
       }
-
-      // Remove stale globals from previously connected devices/fields.
-      for (const oldName of lastActiveVarNames) {
-        if (!activeNow.has(oldName)) {
-          try {
-            delete window[oldName];
-          } catch (_e) {}
-        }
-      }
-      lastActiveVarNames = activeNow;
-
-      return { entries };
+      requestAnimationFrame(mappingLoop);
     }
 
-    function renderVars() {
-      renderQueued = false;
-      updateDeviceCount();
-      if (!varsList) return;
+    // --- Device card rendering ---
 
-      const { entries } = setGlobalsAndCollectEntries();
-      const filter = getFilterText();
-      const filtered = !filter
-        ? entries
-        : entries.filter((e) => e.name.toLowerCase().includes(filter));
+    function snippetFor(cc, ch) {
+      return ch ? `cc(${cc}).midichan(${ch})` : `cc(${cc})`;
+    }
 
-      filtered.sort((a, b) => {
-        if (a.deviceId !== b.deviceId) return a.deviceId.localeCompare(b.deviceId);
-        return a.fieldKey.localeCompare(b.fieldKey);
-      });
+    function createDeviceCard(deviceId, idUpper, ch) {
+      const card = document.createElement("div");
+      card.className = "device-card";
+      card.dataset.deviceId = String(deviceId);
 
-      // When disconnected, just show a static hint.
-      if (!manager) {
-        varsList.innerHTML = "";
-        const empty = document.createElement("div");
-        empty.className = "hint";
-        empty.textContent = "Connect to the WebSocket server to see variables.";
-        varsList.appendChild(empty);
-        return;
-      }
+      const header = document.createElement("div");
+      header.className = "device-card__header";
 
-      // When no variables match, show a static hint.
-      if (filtered.length === 0) {
-        varsList.innerHTML = "";
-        const empty = document.createElement("div");
-        empty.className = "hint";
-        empty.textContent = filter
-          ? "No matches. Try a different filter."
-          : "No devices yet. Power on / connect a device to the socket server.";
-        varsList.appendChild(empty);
-        return;
-      }
+      const idEl = document.createElement("span");
+      idEl.className = "device-card__id";
+      idEl.textContent = idUpper;
 
-      // Incrementally update rows instead of rebuilding the whole list.
-      const existingRowsByName = new Map();
-      for (const row of varsList.querySelectorAll(".var")) {
-        const nameEl = row.querySelector(".var__name");
-        const valueEl = row.querySelector(".var__value");
-        if (!nameEl || !valueEl) continue;
-        const name = nameEl.textContent || "";
-        existingRowsByName.set(name, { row, valueEl });
-      }
+      const chEl = document.createElement("span");
+      chEl.className = "device-card__channel";
+      chEl.textContent = ch ? `ch ${ch}` : "—";
 
-      const seenNames = new Set();
+      header.appendChild(idEl);
+      header.appendChild(chEl);
+      card.appendChild(header);
 
-      for (const item of filtered) {
-        const nameKey = item.name;
-        seenNames.add(nameKey);
-        const existing = existingRowsByName.get(nameKey);
+      const axesEl = document.createElement("div");
+      axesEl.className = "device-card__axes";
 
-        if (existing) {
-          // Update value only when it actually changed.
-          const nextText =
-            typeof item.value === "boolean" ? String(item.value) : String(item.value ?? "—");
-          if (existing.valueEl.textContent !== nextText) {
-            existing.valueEl.textContent = nextText;
-          }
-          // Keep DOM order in sync with sorted order.
-          varsList.appendChild(existing.row);
-          continue;
-        }
-
-        // Create row once for new variables.
+      for (const axis of AXES) {
+        const snippet = snippetFor(axis.cc, ch);
         const row = document.createElement("div");
-        row.className = "var";
-        row.title = "Click to copy. Shift-click to insert at cursor.";
-        row.addEventListener("click", (ev) => {
-          if (ev.shiftKey) {
-            const ok = insertIntoStrudel(replEl, item.name);
-            if (ok) setFooter(`inserted: ${item.name}`);
-            else setFooter("Could not insert into Strudel editor (not ready yet).");
-            return;
-          }
-          safeClipboardWrite(item.name);
-          setFooter(`copied: ${item.name}`);
-        });
+        row.className = "axis-row";
+        row.draggable = true;
+        row.title = "Drag into Strudel, or click to copy.";
+        row.dataset.snippet = snippet;
 
-        const nameEl = document.createElement("div");
-        nameEl.className = "var__name";
-        nameEl.textContent = item.name;
+        const labelEl = document.createElement("span");
+        labelEl.className = "axis-row__label";
+        labelEl.textContent = axis.label;
 
-        const valueEl = document.createElement("div");
-        valueEl.className = "var__value";
-        valueEl.textContent =
-          typeof item.value === "boolean" ? String(item.value) : String(item.value ?? "—");
+        const snippetEl = document.createElement("code");
+        snippetEl.className = "axis-row__snippet";
+        snippetEl.textContent = snippet;
 
-        row.appendChild(nameEl);
+        const barEl = document.createElement("div");
+        barEl.className = "axis-row__bar";
+
+        const fillEl = document.createElement("div");
+        fillEl.className = "axis-row__fill";
+        fillEl.dataset.axis = axis.key;
+        fillEl.style.width = "0%";
+        barEl.appendChild(fillEl);
+
+        const valueEl = document.createElement("span");
+        valueEl.className = "axis-row__value";
+        valueEl.dataset.axis = axis.key;
+        valueEl.textContent = "0";
+
+        row.appendChild(labelEl);
+        row.appendChild(snippetEl);
+        row.appendChild(barEl);
         row.appendChild(valueEl);
-        varsList.appendChild(row);
+        axesEl.appendChild(row);
+
+        row.addEventListener("dragstart", (ev) => {
+          dragSnippet = snippet;
+          ev.dataTransfer.setData("text/plain", snippet);
+          ev.dataTransfer.effectAllowed = "copy";
+        });
+        row.addEventListener("dragend", () => {
+          dragSnippet = null;
+        });
+        row.addEventListener("click", () => {
+          safeClipboardWrite(snippet);
+          setFooter(`copied: ${snippet}`);
+        });
       }
 
-      // Remove rows for variables that are no longer present.
-      for (const [name, info] of existingRowsByName) {
-        if (!seenNames.has(name) && info.row.parentElement === varsList) {
-          varsList.removeChild(info.row);
+      card.appendChild(axesEl);
+      return card;
+    }
+
+    function updateDeviceCardValues(card, data) {
+      for (const axis of AXES) {
+        const rawVal = data[axis.key] ?? 0;
+        const ccVal = Math.round(rawVal / 2);
+        const pct = Math.round((rawVal / 255) * 100);
+
+        const fill = card.querySelector(`.axis-row__fill[data-axis="${axis.key}"]`);
+        const valueEl = card.querySelector(`.axis-row__value[data-axis="${axis.key}"]`);
+        if (fill) fill.style.width = pct + "%";
+        if (valueEl) valueEl.textContent = ccVal;
+      }
+    }
+
+    function renderDevices() {
+      renderQueued = false;
+
+      const count = manager ? manager.getDeviceCount() : 0;
+      const countEl = $("deviceCount");
+      if (countEl) countEl.textContent = `${count} device${count === 1 ? "" : "s"}`;
+
+      if (!devicesList) return;
+
+      if (!manager || count === 0) {
+        devicesList.innerHTML = '<div class="hint">No devices connected.</div>';
+        return;
+      }
+
+      const devices = Array.from(manager.getAllDevices());
+      const currentIds = new Set(devices.map(([id]) => String(id)));
+
+      for (const card of devicesList.querySelectorAll(".device-card")) {
+        if (!currentIds.has(card.dataset.deviceId)) card.remove();
+      }
+
+      for (const [id, device] of devices) {
+        const ch = getChannel(id);
+        const data = device.getSensorData();
+        const idUpper = String(id).slice(0, 4).toUpperCase();
+        const idStr = String(id);
+
+        let card = devicesList.querySelector(`.device-card[data-device-id="${idStr}"]`);
+        if (!card) {
+          card = createDeviceCard(id, idUpper, ch);
+          devicesList.appendChild(card);
         }
+        updateDeviceCardValues(card, data);
       }
     }
 
     function scheduleRender() {
       if (renderQueued) return;
       renderQueued = true;
-      requestAnimationFrame(renderVars);
+      requestAnimationFrame(renderDevices);
     }
 
+    // --- Manager hooks ---
+
     function attachManagerHooks(mgr) {
-      // Trigger UI + optional auto re-evaluate whenever frames arrive.
       const originalParse = mgr.parseAndUpdateDevice.bind(mgr);
       mgr.parseAndUpdateDevice = (frame) => {
         const ok = originalParse(frame);
-        if (ok) {
-          scheduleRender();
-          scheduleAutoEvaluate();
-        }
+        if (ok) scheduleRender();
         return ok;
       };
 
       const originalPrune = mgr.pruneInactive.bind(mgr);
       mgr.pruneInactive = () => {
         originalPrune();
+        for (const id of [...channelMap.keys()]) {
+          if (!mgr.getDevice(id)) channelMap.delete(id);
+        }
         scheduleRender();
       };
     }
 
+    // --- WebSocket connect / disconnect ---
+
     async function connect() {
       const url = String(wsUrlInput?.value || "").trim();
       if (!url) return;
-
       try {
         setFooter("");
         setStatus("warn", "connecting…");
         connectBtn.disabled = true;
         disconnectBtn.disabled = false;
-
         manager = new HitloopDeviceManager(url);
         attachManagerHooks(manager);
         await manager.connect();
@@ -391,7 +307,8 @@ const deviceSignal = (deviceId, field, opts = {}) => {
       const ws = manager?.ws;
       const ready = ws && ws.readyState === WebSocket.OPEN;
       if (ready) {
-        setStatus("ok", `connected • devices: ${manager.getDeviceCount()}`);
+        const n = manager.getDeviceCount();
+        setStatus("ok", `connected · ${n} device${n === 1 ? "" : "s"}`);
       } else if (manager) {
         setStatus("warn", "connecting…");
       } else {
@@ -399,13 +316,13 @@ const deviceSignal = (deviceId, field, opts = {}) => {
       }
     }
 
+    // --- Strudel controls ---
+
     async function evaluatePlay() {
       try {
         setFooter("");
-        // User gesture: this is usually required for audio.
         await replEl?.editor?.evaluate(true);
-        lastEvalAt = Date.now();
-        setFooter(`evaluated @ ${new Date(lastEvalAt).toLocaleTimeString()}`);
+        setFooter(`evaluated @ ${new Date().toLocaleTimeString()}`);
       } catch (e) {
         setFooter(`eval error: ${String(e?.message || e)}`);
       }
@@ -420,35 +337,53 @@ const deviceSignal = (deviceId, field, opts = {}) => {
       }
     }
 
-    // Wire UI
-    renderFieldChips();
-    scheduleRender();
+    // --- Drag onto Strudel editor ---
 
-    // Install the Strudel-side deviceSignal helper once the REPL is ready.
-    const helperInterval = setInterval(() => {
-      if (installDeviceSignalPrelude()) {
-        clearInterval(helperInterval);
-      }
-    }, 200);
+    if (editorWrap) {
+      editorWrap.addEventListener("dragover", (ev) => {
+        if (!dragSnippet) return;
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = "copy";
+        editorWrap.classList.add("drop-active");
+      });
+      editorWrap.addEventListener("dragleave", (ev) => {
+        if (!editorWrap.contains(ev.relatedTarget)) {
+          editorWrap.classList.remove("drop-active");
+        }
+      });
+      editorWrap.addEventListener("drop", (ev) => {
+        ev.preventDefault();
+        editorWrap.classList.remove("drop-active");
+        const text = ev.dataTransfer.getData("text/plain") || dragSnippet;
+        if (!text) return;
+        const ok = insertIntoStrudel(replEl, text);
+        if (ok) setFooter(`inserted: ${text}`);
+        else setFooter("Could not insert — click into the editor first to set cursor position.");
+      });
+    }
+
+    // --- Wire up ---
+
+    midiSelect?.addEventListener("change", () => {
+      DeviceMidi.setSelectedOutputId(midiSelect.value || null);
+    });
 
     connectBtn?.addEventListener("click", connect);
     disconnectBtn?.addEventListener("click", disconnect);
-    filterInput?.addEventListener("input", scheduleRender);
-    evalBtn?.addEventListener("click", evaluatePlay);
-    stopBtn?.addEventListener("click", stop);
+    $("evalBtn")?.addEventListener("click", evaluatePlay);
+    $("stopBtn")?.addEventListener("click", stop);
 
-    // Keep status + stale removals fresh even if no frames arrive.
-    setInterval(updateConnectionStatusLoop, 250);
-    setInterval(scheduleRender, 1000);
-
-    // Helpful footer when Strudel emits state updates.
     replEl?.addEventListener("update", (ev) => {
       const st = ev?.detail;
       const started = st?.scheduler?.started;
-      if (typeof started === "boolean") {
-        setFooter(started ? "playing" : "stopped");
-      }
+      if (typeof started === "boolean") setFooter(started ? "playing" : "stopped");
     });
+
+    // Start
+    await initMidi();
+    scheduleRender();
+    requestAnimationFrame(mappingLoop);
+    setInterval(updateConnectionStatusLoop, 250);
+    setInterval(scheduleRender, 1000);
   });
 })();
-
