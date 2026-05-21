@@ -330,7 +330,9 @@ body {
 /* Script list */
 
 .script-list {
-  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 10px;
   display: grid;
   gap: 6px;
@@ -384,7 +386,9 @@ body {
 /* Device list */
 
 .devices {
-  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 10px;
   display: grid;
   gap: 8px;
